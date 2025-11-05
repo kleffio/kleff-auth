@@ -1,34 +1,40 @@
 package postgres
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
+	"os"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v4"
+	"github.com/joho/godotenv"
 )
 
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "postgres"
-	password = "your-password"
-	dbname   = "calhounio_demo"
-)
-
-func main() {
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-	db, err := sql.Open("postgres", psqlInfo)
-	if err != nil {
-		panic(err)
+func init() {
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("Error loading .env file")
 	}
-	defer db.Close()
+}
 
-	err = db.Ping()
+func InitDB() (*pgx.Conn, error) {
+	// Get connection details from environment variables
+	user := os.Getenv("DB_USER")
+	password := os.Getenv("DB_PASSWORD")
+	host := os.Getenv("DB_HOST")
+	port := os.Getenv("DB_PORT")
+	dbname := os.Getenv("DB_NAME")
+
+	// Create the connection string
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, password, host, port, dbname)
+
+	db, err := pgx.Connect(context.Background(), connStr)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-
-	fmt.Println("Successfully connected!")
+	// Test the connection
+	if err := db.Ping(context.Background()); err != nil {
+		db.Close(context.Background())
+		return nil, err
+	}
+	fmt.Println("Connected to PostgreSQL database!")
+	return db, nil
 }
