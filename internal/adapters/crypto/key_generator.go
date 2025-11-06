@@ -1,4 +1,4 @@
-package encryption
+package crypto
 
 import (
 	"crypto/ed25519"
