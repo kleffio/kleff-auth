@@ -35,7 +35,7 @@ internal/
     adapters/
         http/                   # handlers → use-cases
         postgres/               # repositories (implements ports)
-        encryption/                 # token signer (Ed25519), JWKS
+        crypto/                 # token signer (Ed25519), JWKS
     runtime/                    # config, logger, health
     migrations/                 # SQL
 docs/                           # architecture docs & diagrams
