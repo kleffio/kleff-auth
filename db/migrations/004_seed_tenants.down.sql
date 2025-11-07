@@ -1,0 +1,1 @@
+DELETE FROM tenants WHERE slug IN ('kleff','portfolio');
