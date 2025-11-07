@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -45,7 +46,6 @@ func (a *Argon2id) NeedsRehash(encoded string) bool {
 
 func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
 	parts := strings.Split(encoded, "$")
-
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false, errors.New("invalid hash format")
 	}
@@ -58,23 +58,24 @@ func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
 		}
 	}
 
-	var (
-		m64 uint64
-		t32 uint64
-		p8  uint64
-		err error
-	)
-
-	if m64, err = strconv.ParseUint(params["m"], 10, 32); err != nil {
+	mv, err := strconv.ParseUint(params["m"], 10, 32)
+	if err != nil {
 		return false, errors.New("invalid m")
 	}
-
-	if t32, err = strconv.ParseUint(params["t"], 10, 32); err != nil {
+	tv, err := strconv.ParseUint(params["t"], 10, 32)
+	if err != nil {
 		return false, errors.New("invalid t")
 	}
-
-	if p8, err = strconv.ParseUint(params["p"], 10, 8); err != nil {
+	pv, err := strconv.ParseUint(params["p"], 10, 8)
+	if err != nil {
 		return false, errors.New("invalid p")
+	}
+
+	if mv > math.MaxUint32 || tv > math.MaxUint32 {
+		return false, errors.New("argon2 params exceed uint32")
+	}
+	if pv > math.MaxUint8 {
+		return false, errors.New("argon2 parallelism exceeds uint8")
 	}
 
 	decode := func(s string) ([]byte, error) {
@@ -88,16 +89,23 @@ func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
 	if err != nil {
 		return false, errors.New("invalid salt b64")
 	}
-
 	sum, err := decode(parts[5])
 	if err != nil {
 		return false, errors.New("invalid sum b64")
 	}
 
-	key := argon2.IDKey([]byte(plain), salt, uint32(t32), uint32(m64), uint8(p8), uint32(len(sum)))
-	if subtle.ConstantTimeCompare(sum, key) == 1 {
-		return true, nil
+	if uint64(len(sum)) > math.MaxUint32 {
+		return false, errors.New("key length exceeds uint32")
 	}
 
-	return false, nil
+	key := argon2.IDKey(
+		[]byte(plain),
+		salt,
+		uint32(tv),
+		uint32(mv),
+		uint8(pv),
+		uint32(len(sum)),
+	)
+
+	return subtle.ConstantTimeCompare(sum, key) == 1, nil
 }
