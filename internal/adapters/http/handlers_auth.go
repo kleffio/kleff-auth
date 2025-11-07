@@ -2,70 +2,225 @@ package http
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
+	"strings"
 
-	app "github.com/kleffio/kleff-auth/internal/application/auth"
+	"github.com/kleffio/kleff-auth/internal/application/auth"
 )
 
-type signUpReq struct {
-	Tenant   string         `json:"tenant"`
-	Email    *string        `json:"email"`
-	Username *string        `json:"username"`
-	Password string         `json:"password"`
-	Attrs    map[string]any `json:"attrs"`
+type AuthHandlers struct {
+	SVC *auth.Service
 }
 
-type signInReq struct {
-	Tenant     string `json:"tenant"`
-	Identifier string `json:"identifier"`
-	Password   string `json:"password"`
+func getClientIP(r *http.Request) string {
+	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+		parts := strings.Split(xf, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return ""
 }
 
-func writeJSON(w http.ResponseWriter, code int, v any) {
+func jsonResp(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func (s *Server) handleSignUp(w http.ResponseWriter, r *http.Request) {
-	var req signUpReq
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "bad_json"})
-		return
-	}
-
-	attrs, _ := json.Marshal(req.Attrs)
-	_, tok, err := s.auth.SignUp(r.Context(), app.SignUpInput{
-		Tenant: req.Tenant, Email: req.Email, Username: req.Username,
-		Password: req.Password, AttrsJSON: attrs,
+func setAuthCookies(w http.ResponseWriter, access string, refresh string, accessTTLSeconds int, refreshTTLSeconds int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    access,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   accessTTLSeconds,
 	})
 
-	if err != nil {
-		writeJSON(w, 400, map[string]string{"error": err.Error()})
-		return
-	}
-
-	writeJSON(w, 201, map[string]any{"session": tok})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refresh,
+		Path:     "/v1/auth/refresh",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   refreshTTLSeconds,
+	})
 }
 
-func (s *Server) handleSignIn(w http.ResponseWriter, r *http.Request) {
-	var req signInReq
+func clearAuthCookies(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: "access_token", Value: "", Path: "/", HttpOnly: true, Secure: true, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "refresh_token", Value: "", Path: "/v1/auth/refresh", HttpOnly: true, Secure: true, MaxAge: -1})
+}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, 400, map[string]string{"error": "bad_json"})
+func (h *AuthHandlers) JWKS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(h.SVC.JWKS())
+}
+
+func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) {
+	var in auth.SignUpInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
+	in.IP = getClientIP(r)
+	in.UserAgent = r.UserAgent()
 
-	_, email, username, tok, err := s.auth.SignIn(r.Context(), app.SignInInput{
-		Tenant: req.Tenant, Identifier: req.Identifier, Password: req.Password,
-	})
-
+	userID, tok, err := h.SVC.SignUp(r.Context(), in)
 	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": err.Error()})
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, 200, map[string]any{"user": map[string]any{"email": email, "username": username}, "session": tok})
+	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
+	jsonResp(w, http.StatusOK, map[string]any{
+		"user_id": userID,
+		"session": tok,
+	})
+}
+
+func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) {
+	var in auth.SignInInput
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	in.IP = getClientIP(r)
+	in.UserAgent = r.UserAgent()
+
+	uid, email, username, tok, err := h.SVC.SignIn(r.Context(), in)
+	if err != nil {
+		jsonResp(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		return
+	}
+
+	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
+	jsonResp(w, http.StatusOK, map[string]any{
+		"user": map[string]any{
+			"id":       uid,
+			"email":    email,
+			"username": username,
+		},
+		"session": tok,
+	})
+}
+
+func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
+	rt := ""
+	if c, err := r.Cookie("refresh_token"); err == nil {
+		rt = c.Value
+	}
+	if rt == "" {
+		var body struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			rt = body.RefreshToken
+		}
+	}
+	if rt == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
+		return
+	}
+
+	ip := getClientIP(r)
+	ua := r.UserAgent()
+
+	tok, err := h.SVC.RefreshTokens(r.Context(), rt, ua, ip, "")
+	if err != nil {
+		code := http.StatusUnauthorized
+		if err == auth.ErrReuseDetected {
+			code = http.StatusForbidden
+		}
+		jsonResp(w, code, map[string]string{"error": err.Error()})
+		return
+	}
+
+	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
+	jsonResp(w, http.StatusOK, map[string]any{"session": tok})
+}
+
+func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
+	rt := ""
+	if c, err := r.Cookie("refresh_token"); err == nil {
+		rt = c.Value
+	}
+	if rt == "" {
+		var body struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			rt = body.RefreshToken
+		}
+	}
+	if rt == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
+		return
+	}
+	if err := h.SVC.Logout(r.Context(), rt); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	clearAuthCookies(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	rt := ""
+	if c, err := r.Cookie("refresh_token"); err == nil {
+		rt = c.Value
+	}
+	if rt == "" {
+		var body struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+			rt = body.RefreshToken
+		}
+	}
+	if rt == "" {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
+		return
+	}
+	if err := h.SVC.LogoutAll(r.Context(), rt); err != nil {
+		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	clearAuthCookies(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(ctxUserID).(string)
+	tenantID, _ := r.Context().Value(ctxTenantID).(string)
+
+	if userID == "" || tenantID == "" {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	email, username, err := h.SVC.Me(r.Context(), tenantID, userID)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	jsonResp(w, http.StatusOK, map[string]any{
+		"user": map[string]any{
+			"id":        userID,
+			"tenant_id": tenantID,
+			"username":  username,
+			"email":     email,
+		},
+	})
 }

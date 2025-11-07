@@ -1,3 +1,4 @@
+// internal/adapters/crypto/eddsa_signer.go
 package crypto
 
 import (
@@ -5,9 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"time"
 
-	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type EddsaSigner struct {
@@ -19,25 +21,25 @@ type EddsaSigner struct {
 
 func NewInMemorySigner(issuer string) (*EddsaSigner, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
-
 	if err != nil {
 		return nil, err
 	}
-
-	return &EddsaSigner{KID: newKID(), Priv: priv, Pub: pub, Issuer: issuer}, nil
+	return &EddsaSigner{
+		KID:    newKID(),
+		Priv:   priv,
+		Pub:    pub,
+		Issuer: issuer,
+	}, nil
 }
 
 func newKID() string {
 	b := make([]byte, 8)
-
 	_, _ = rand.Read(b)
-
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func (s *EddsaSigner) JWKS() []byte {
 	type jwk struct{ Kty, Crv, X, Kid, Alg, Use string }
-
 	type jwks struct {
 		Keys []jwk `json:"keys"`
 	}
@@ -47,13 +49,11 @@ func (s *EddsaSigner) JWKS() []byte {
 		X:   base64.RawURLEncoding.EncodeToString(s.Pub),
 		Kid: s.KID, Alg: "EdDSA", Use: "sig",
 	}}}
-
 	b, _ := json.Marshal(out)
-
 	return b
 }
 
-type claims struct {
+type accessClaims struct {
 	Sub   string `json:"sub"`
 	Tid   string `json:"tid"`
 	Scope string `json:"scope"`
@@ -62,29 +62,44 @@ type claims struct {
 }
 
 func (s *EddsaSigner) IssueAccess(sub, tid, scope, jti string, ttl time.Duration) (string, error) {
-	c := claims{
+	now := time.Now()
+	c := accessClaims{
 		Sub: sub, Tid: tid, Scope: scope, JTI: jti,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.Issuer,
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
+			Audience:  []string{"kleff-auth"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},
 	}
-
 	t := jwt.NewWithClaims(jwt.SigningMethodEdDSA, c)
 	t.Header["kid"] = s.KID
-
 	return t.SignedString(s.Priv)
 }
 
-func (s *EddsaSigner) NewRefresh() (string, string, error) {
-	b := make([]byte, 32)
-
-	if _, err := rand.Read(b); err != nil {
-		return "", "", err
+func (s *EddsaSigner) ParseAccess(token string) (string, string, error) {
+	if token == "" {
+		return "", "", errors.New("missing token")
 	}
-
-	raw := base64.RawURLEncoding.EncodeToString(b)
-
-	return raw, raw, nil
+	t, err := jwt.ParseWithClaims(
+		token,
+		&accessClaims{},
+		func(t *jwt.Token) (any, error) {
+			if t.Method != jwt.SigningMethodEdDSA {
+				return nil, errors.New("unexpected alg")
+			}
+			return s.Pub, nil
+		},
+		jwt.WithIssuer(s.Issuer),
+		jwt.WithAudience("kleff-auth"),
+		jwt.WithValidMethods([]string{jwt.SigningMethodEdDSA.Alg()}),
+	)
+	if err != nil || !t.Valid {
+		return "", "", errors.New("invalid token")
+	}
+	claims, ok := t.Claims.(*accessClaims)
+	if !ok || claims.Sub == "" || claims.Tid == "" {
+		return "", "", errors.New("bad claims")
+	}
+	return claims.Sub, claims.Tid, nil
 }

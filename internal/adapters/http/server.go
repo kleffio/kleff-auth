@@ -3,32 +3,30 @@ package http
 import (
 	"net/http"
 
-	app "github.com/kleffio/kleff-auth/internal/application/auth"
+	"github.com/go-chi/chi/v5"
+	"github.com/kleffio/kleff-auth/internal/application/auth"
 )
 
-type Server struct {
-	auth *app.Service
-}
+func NewRouter(svc *auth.Service) http.Handler {
+	h := &AuthHandlers{SVC: svc}
+	mw := &AuthMiddleware{Tokens: svc.Tokens}
 
-func NewServer(authService *app.Service) *http.ServeMux {
-	s := &Server{auth: authService}
-	mux := http.NewServeMux()
+	r := chi.NewRouter()
 
-	mux.HandleFunc("GET /healthz", s.handleHealth)
-	mux.HandleFunc("GET /.well-known/jwks.json", s.handleJWKS)
+	r.Route("/v1/auth", func(r chi.Router) {
+		r.Get("/.well-known/jwks.json", h.JWKS)
+		r.Post("/signup", h.SignUp)
+		r.Post("/signin", h.SignIn)
+		r.Post("/refresh", h.Refresh)
+		r.Post("/logout", h.Logout)
+		r.Post("/logout-all", h.LogoutAll)
+		r.Group(func(r chi.Router) {
+			r.Use(mw.WithAuth)
+			r.Get("/me", h.Me)
+		})
+	})
 
-	mux.HandleFunc("POST /v1/auth/signup", s.handleSignUp)
-	mux.HandleFunc("POST /v1/auth/signin", s.handleSignIn)
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 
-	return mux
-}
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("ok"))
-}
-
-func (s *Server) handleJWKS(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(s.auth.JWKS())
+	return r
 }

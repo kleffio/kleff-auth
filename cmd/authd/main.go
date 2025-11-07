@@ -49,7 +49,7 @@ func main() {
 		if err := migrate.Run(ctx, dsn); err != nil {
 			log.Fatalf("migrate: %v", err)
 		}
-		log.Printf("Migrations applied (or already up-to-date)") // <-- summary
+		log.Printf("Migrations applied (or already up-to-date)")
 	}
 
 	var dbname string
@@ -63,19 +63,34 @@ func main() {
 	if err != nil {
 		log.Fatalf("signer: %v", err)
 	}
-	hasher := cryptoad.NewArgon2id()
 
-	//-- App --\\
+	hasher := cryptoad.NewArgon2id()
+	refreshCodec := &cryptoad.RefreshCodec{Hasher: hasher}
+
+	//-- Repos --\\
+
+	tenantRepo := pg.NewTenantRepo(db)
+	userRepo := pg.NewUserRepo(db)
+	sessionRepo := pg.NewSessionRepo(db)
+
+	//-- Application service --\\
 
 	svc := &app.Service{
-		Tenants:   pg.NewTenantRepo(db),
-		Users:     pg.NewUserRepo(db),
-		Hash:      hasher,
-		Tokens:    signer,
-		AccessTTL: 15 * time.Minute,
+		Tenants:  tenantRepo,
+		Users:    userRepo,
+		Hash:     hasher,
+		Tokens:   signer,
+		Sessions: sessionRepo,
+		Refresh:  refreshCodec,
+
+		AccessTTL:  15 * time.Minute,
+		RefreshTTL: 30 * 24 * time.Hour,
 	}
 
-	mux := httpad.NewServer(svc)
+	//-- HTTP server --\\
+
+	mux := httpad.NewRouter(svc)
+
 	addr := utils.GetEnv("HTTP_ADDR", ":8080")
 	log.Printf("authd listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
