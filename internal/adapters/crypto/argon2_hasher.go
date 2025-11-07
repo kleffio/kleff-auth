@@ -87,9 +87,8 @@ func (a *Argon2id) NeedsRehash(encoded string) bool {
 		return true
 	}
 
-	maxInt := int(^uint(0) >> 1)
-
-	if a.SaltLen > uint32(maxInt) || a.KeyLen > uint32(maxInt) {
+	maxIntU := uint64(^uint(0) >> 1)
+	if uint64(a.SaltLen) > maxIntU || uint64(a.KeyLen) > maxIntU {
 		return true
 	}
 	if len(salt) != int(a.SaltLen) {
@@ -152,8 +151,8 @@ func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
 		return false, errors.New("invalid sum b64")
 	}
 
-	maxInt := int(^uint(0) >> 1)
-	if a.KeyLen > uint32(maxInt) {
+	maxIntU := uint64(^uint(0) >> 1)
+	if uint64(a.KeyLen) > maxIntU {
 		return false, errors.New("key length exceeds platform int")
 	}
 	if len(sum) != int(a.KeyLen) {
