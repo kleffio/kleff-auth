@@ -1,0 +1,103 @@
+// internal/adapters/crypto/argon2_hasher.go
+package crypto
+
+import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"golang.org/x/crypto/argon2"
+)
+
+type Argon2id struct {
+	Time    uint32
+	Memory  uint32
+	Threads uint8
+	SaltLen uint32
+	KeyLen  uint32
+}
+
+func NewArgon2id() *Argon2id {
+	return &Argon2id{Time: 3, Memory: 64 * 1024, Threads: 2, SaltLen: 16, KeyLen: 32}
+}
+
+func (a *Argon2id) Hash(plain string) (string, error) {
+	salt := make([]byte, a.SaltLen)
+	if _, err := rand.Read(salt); err != nil {
+		return "", err
+	}
+
+	sum := argon2.IDKey([]byte(plain), salt, a.Time, a.Memory, a.Threads, a.KeyLen)
+	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
+		a.Memory, a.Time, a.Threads,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(sum),
+	), nil
+}
+
+func (a *Argon2id) NeedsRehash(encoded string) bool {
+	return !strings.HasPrefix(encoded, "$argon2id$")
+}
+
+func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
+	parts := strings.Split(encoded, "$")
+
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return false, errors.New("invalid hash format")
+	}
+
+	params := map[string]string{}
+	for _, kv := range strings.Split(parts[3], ",") {
+		p := strings.SplitN(strings.TrimSpace(kv), "=", 2)
+		if len(p) == 2 {
+			params[p[0]] = p[1]
+		}
+	}
+
+	var (
+		m64 uint64
+		t32 uint64
+		p8  uint64
+		err error
+	)
+
+	if m64, err = strconv.ParseUint(params["m"], 10, 32); err != nil {
+		return false, errors.New("invalid m")
+	}
+
+	if t32, err = strconv.ParseUint(params["t"], 10, 32); err != nil {
+		return false, errors.New("invalid t")
+	}
+
+	if p8, err = strconv.ParseUint(params["p"], 10, 8); err != nil {
+		return false, errors.New("invalid p")
+	}
+
+	decode := func(s string) ([]byte, error) {
+		if b, err := base64.RawStdEncoding.DecodeString(s); err == nil {
+			return b, nil
+		}
+		return base64.StdEncoding.DecodeString(s)
+	}
+
+	salt, err := decode(parts[4])
+	if err != nil {
+		return false, errors.New("invalid salt b64")
+	}
+
+	sum, err := decode(parts[5])
+	if err != nil {
+		return false, errors.New("invalid sum b64")
+	}
+
+	key := argon2.IDKey([]byte(plain), salt, uint32(t32), uint32(m64), uint8(p8), uint32(len(sum)))
+	if subtle.ConstantTimeCompare(sum, key) == 1 {
+		return true, nil
+	}
+
+	return false, nil
+}
