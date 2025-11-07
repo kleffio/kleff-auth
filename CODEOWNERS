@@ -1,0 +1,19 @@
+# Fallback owners (catch-all)
+*                                   @kleffio/maintainers
+
+# App / service areas (examples)
+# Go backend
+/cmd/**                             @kleffio/backend
+/internal/**                        @kleffio/backend
+
+# Infrastructure & CI
+/.github/**                         @kleffio/infra
+/infrastructure/**                  @kleffio/infra
+
+# Docs & community
+/docs/**                            @kleffio/docs
+*.md                                @kleffio/docs
+
+# Security-sensitive areas
+**/crypto/**                        @kleffio/security
+**/security/**                      @kleffio/security
