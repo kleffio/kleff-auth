@@ -1,4 +1,3 @@
-// internal/adapters/crypto/argon2_hasher.go
 package crypto
 
 import (
@@ -78,10 +77,25 @@ func (a *Argon2id) NeedsRehash(encoded string) bool {
 		}
 		return base64.StdEncoding.DecodeString(s)
 	}
-	if salt, err := decode(parts[4]); err != nil || uint32(len(salt)) != a.SaltLen {
+
+	salt, err := decode(parts[4])
+	if err != nil {
 		return true
 	}
-	if sum, err := decode(parts[5]); err != nil || uint32(len(sum)) != a.KeyLen {
+	sum, err := decode(parts[5])
+	if err != nil {
+		return true
+	}
+
+	maxInt := int(^uint(0) >> 1)
+
+	if a.SaltLen > uint32(maxInt) || a.KeyLen > uint32(maxInt) {
+		return true
+	}
+	if len(salt) != int(a.SaltLen) {
+		return true
+	}
+	if len(sum) != int(a.KeyLen) {
 		return true
 	}
 
@@ -138,7 +152,11 @@ func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
 		return false, errors.New("invalid sum b64")
 	}
 
-	if uint32(len(sum)) != a.KeyLen {
+	maxInt := int(^uint(0) >> 1)
+	if a.KeyLen > uint32(maxInt) {
+		return false, errors.New("key length exceeds platform int")
+	}
+	if len(sum) != int(a.KeyLen) {
 		return false, errors.New("unexpected hash length")
 	}
 
@@ -148,7 +166,7 @@ func (a *Argon2id) Verify(plain, encoded string) (bool, error) {
 		uint32(tv),
 		uint32(mv),
 		uint8(pv),
-		a.KeyLen, // use configured key length
+		a.KeyLen,
 	)
 
 	return subtle.ConstantTimeCompare(sum, key) == 1, nil
