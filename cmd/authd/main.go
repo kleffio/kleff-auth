@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/kleffio/kleff-auth/internal/infrastructure/bootstrap"
-	"github.com/kleffio/kleff-auth/internal/infrastructure/migrate"
 	"github.com/kleffio/kleff-auth/internal/utils"
 
 	cryptoad "github.com/kleffio/kleff-auth/internal/adapters/crypto"
 	httpad "github.com/kleffio/kleff-auth/internal/adapters/http"
 	pg "github.com/kleffio/kleff-auth/internal/adapters/postgres"
 	app "github.com/kleffio/kleff-auth/internal/application/auth"
+	migration "github.com/kleffio/kleff-auth/internal/infrastructure/db"
 )
 
 func main() {
@@ -46,8 +46,8 @@ func main() {
 			utils.GetEnv("DB_PORT", "5432"),
 			utils.GetEnv("DB_NAME", "kleff_auth"),
 		)
-		if err := migrate.Run(ctx, dsn); err != nil {
-			log.Fatalf("migrate: %v", err)
+		if err := migration.Run(ctx, dsn); err != nil {
+			log.Fatalf("db: %v", err)
 		}
 		log.Printf("Migrations applied (or already up-to-date)")
 	}

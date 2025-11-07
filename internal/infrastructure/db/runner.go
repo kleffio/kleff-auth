@@ -1,18 +1,20 @@
-package migrate
+package db
 
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
-
-	"github.com/kleffio/kleff-auth/db"
 )
 
+//go:embed migrations/*.sql
+var FS embed.FS
+
 func Run(ctx context.Context, dsn string) error {
-	goose.SetBaseFS(dbembed.FS)
+	goose.SetBaseFS(FS)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err
 	}
