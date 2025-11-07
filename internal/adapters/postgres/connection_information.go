@@ -38,3 +38,7 @@ func InitDB() (*pgx.Conn, error) {
 	fmt.Println("Connected to PostgreSQL database!")
 	return db, nil
 }
+
+func createAccount() {
+
+}
