@@ -42,4 +42,5 @@ docs/                           # architecture docs & diagrams
 ```
 
 ### 🪪 License
-(To be determined)
+
+This project is licensed under the [License Name](LICENSE) - see the [LICENSE](LICENSE) file for details.
