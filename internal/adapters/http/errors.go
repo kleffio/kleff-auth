@@ -174,41 +174,37 @@ func Wrap(err error, statusCode int, message string) *HTTPError {
 
 type HandlerWithError func(w http.ResponseWriter, r *http.Request) error
 
+func httpStatusAndMsg(err error) (int, string) {
+	switch {
+	case errors.Is(err, auth.ErrUnknownTenant):
+		return http.StatusBadRequest, "unknown tenant"
+	case errors.Is(err, auth.ErrInvalidCredentials):
+		return http.StatusUnauthorized, "invalid credentials"
+	case errors.Is(err, auth.ErrInvalidRefresh):
+		return http.StatusUnauthorized, "invalid refresh token"
+	case errors.Is(err, auth.ErrReuseDetected):
+		return http.StatusForbidden, "refresh token reuse detected"
+	default:
+		return http.StatusInternalServerError, "internal server error"
+	}
+}
+
 func ErrorMiddleware(h HandlerWithError) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := h(w, r)
-		if err == nil {
+		if err := h(w, r); err == nil {
 			return
+		} else {
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) {
+				respondWithError(w, httpErr.StatusCode, httpErr.Error(), httpErr.Details)
+
+				return
+			}
+
+			statusCode, message := httpStatusAndMsg(err)
+
+			respondWithError(w, statusCode, message, nil)
 		}
-
-		var httpErr *HTTPError
-		if errors.As(err, &httpErr) {
-			respondWithError(w, httpErr.StatusCode, httpErr.Error(), httpErr.Details)
-			return
-		}
-
-		statusCode := http.StatusInternalServerError
-		message := err.Error()
-
-		switch {
-		case errors.Is(err, auth.ErrUnknownTenant):
-			statusCode = http.StatusBadRequest
-			message = "unknown tenant"
-		case errors.Is(err, auth.ErrInvalidCredentials):
-			statusCode = http.StatusUnauthorized
-			message = "invalid credentials"
-		case errors.Is(err, auth.ErrInvalidRefresh):
-			statusCode = http.StatusUnauthorized
-			message = "invalid refresh token"
-		case errors.Is(err, auth.ErrReuseDetected):
-			statusCode = http.StatusForbidden
-			message = "refresh token reuse detected"
-		default:
-			statusCode = http.StatusInternalServerError
-			message = "internal server error"
-		}
-
-		respondWithError(w, statusCode, message, nil)
 	}
 }
 
@@ -220,7 +216,7 @@ func respondWithError(w http.ResponseWriter, statusCode int, message string, det
 		"error": message,
 	}
 
-	if details != nil && len(details) > 0 {
+	if len(details) > 0 {
 		response["details"] = details
 	}
 
