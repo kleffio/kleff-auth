@@ -207,6 +207,12 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string, ua str
 		return tok, err
 	}
 
+	if tenantID == "" {
+		if tenantID, err = s.Users.GetTenantIDByUser(ctx, old.UserID.String()); err != nil || tenantID == "" {
+			return tok, ErrInvalidRefresh
+		}
+	}
+
 	jti := uuid.NewString()
 	access, err := s.Tokens.IssueAccess(old.UserID.String(), tenantID, "openid profile", jti, s.AccessTTL)
 	if err != nil {

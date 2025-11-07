@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -42,20 +43,26 @@ func (c *RefreshCodec) Encode(sessionID uuid.UUID, secret []byte) string {
 }
 
 func (c *RefreshCodec) Parse(rt string) (uuid.UUID, []byte, error) {
-	var idPart, secPart string
-	n, _ := fmt.Sscanf(rt, "%[^.].%s", &idPart, &secPart)
-	if n != 2 {
-		return uuid.Nil, nil, fmt.Errorf("bad refresh token format")
+	parts := strings.Split(rt, ".")
+	if len(parts) != 2 {
+		return uuid.Nil, nil, fmt.Errorf("bad refresh token format: expected 2 parts, got %d", len(parts))
 	}
 
+	idPart := parts[0]
+	secPart := parts[1]
+
 	idb, err := base64.RawURLEncoding.DecodeString(idPart)
-	if err != nil || len(idb) != 16 {
-		return uuid.Nil, nil, fmt.Errorf("bad session id")
+	if err != nil {
+		return uuid.Nil, nil, fmt.Errorf("bad session id encoding: %w", err)
+	}
+
+	if len(idb) != 16 {
+		return uuid.Nil, nil, fmt.Errorf("bad session id length: expected 16, got %d", len(idb))
 	}
 
 	secret, err := base64.RawURLEncoding.DecodeString(secPart)
 	if err != nil {
-		return uuid.Nil, nil, fmt.Errorf("bad secret")
+		return uuid.Nil, nil, fmt.Errorf("bad secret encoding: %w", err)
 	}
 
 	sid, err := uuid.FromBytes(idb)

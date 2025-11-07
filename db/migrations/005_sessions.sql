@@ -5,10 +5,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     client_id    uuid,
+    refresh_hash bytea NOT NULL UNIQUE,
     family_id    uuid NOT NULL,
     parent_id    uuid,
     replaced_by  uuid,
-    refresh_hash bytea NOT NULL,
     user_agent   text,
     ip           inet,
     created_at   timestamptz NOT NULL DEFAULT now(),
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at   timestamptz NOT NULL,
     revoked_at   timestamptz,
     reason       text
-);
+    );
 
 ALTER TABLE sessions
     ADD CONSTRAINT fk_sessions_parent
@@ -25,6 +25,9 @@ ALTER TABLE sessions
 ALTER TABLE sessions
     ADD CONSTRAINT fk_sessions_replaced_by
         FOREIGN KEY (replaced_by) REFERENCES sessions(id) ON DELETE SET NULL;
+
+ALTER TABLE sessions
+    ADD COLUMN refresh_lookup_hash bytea UNIQUE;
 
 CREATE INDEX IF NOT EXISTS ix_sessions_user_id      ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS ix_sessions_family_id    ON sessions (family_id);

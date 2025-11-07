@@ -16,6 +16,7 @@ type UserRepoPort interface {
 	CreateUser(ctx context.Context, tenantID string, email, username *string, passwordHash string, attrsJSON *string) (userID string, err error)
 	GetUserByIdentifier(ctx context.Context, tenantID string, identifier string) (userID string, passwordHash string, email *string, username *string, err error)
 	GetUserByID(ctx context.Context, tenantID string, userID string) (email *string, username *string, err error)
+	GetTenantIDByUser(ctx context.Context, userID string) (tenantID string, err error)
 	UpdatePasswordHash(ctx context.Context, userID string, newHash string) error
 }
 

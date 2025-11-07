@@ -1,7 +1,9 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -11,6 +13,10 @@ import (
 
 type AuthHandlers struct {
 	SVC *auth.Service
+}
+
+type refreshBody struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 func getClientIP(r *http.Request) string {
@@ -34,6 +40,36 @@ func jsonResp(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func extractRefreshToken(r *http.Request) string {
+	if c, err := r.Cookie("refresh_token"); err == nil && c != nil {
+		v := strings.TrimSpace(c.Value)
+		trimmed := strings.Trim(v, `"'`)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	if r.Method == http.MethodPost || r.Method == http.MethodPut {
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			return ""
+		}
+
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		var b refreshBody
+		if err := json.Unmarshal(bodyBytes, &b); err == nil {
+			v := strings.TrimSpace(b.RefreshToken)
+			trimmed := strings.Trim(v, `"'`)
+			if trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+
+	return ""
+}
+
 func setAuthCookies(w http.ResponseWriter, access string, refresh string, accessTTLSeconds int, refreshTTLSeconds int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "access_token",
@@ -48,7 +84,7 @@ func setAuthCookies(w http.ResponseWriter, access string, refresh string, access
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refresh,
-		Path:     "/v1/auth/refresh",
+		Path:     "/v1/auth",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
@@ -57,8 +93,23 @@ func setAuthCookies(w http.ResponseWriter, access string, refresh string, access
 }
 
 func clearAuthCookies(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: "access_token", Value: "", Path: "/", HttpOnly: true, Secure: true, MaxAge: -1})
-	http.SetCookie(w, &http.Cookie{Name: "refresh_token", Value: "", Path: "/v1/auth/refresh", HttpOnly: true, Secure: true, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		MaxAge:   -1,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/v1/auth",
+		HttpOnly: true,
+		Secure:   true,
+		MaxAge:   -1,
+	})
 }
 
 func (h *AuthHandlers) JWKS(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +146,7 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
+
 	in.IP = getClientIP(r)
 	in.UserAgent = r.UserAgent()
 
@@ -116,18 +168,8 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
-	rt := ""
-	if c, err := r.Cookie("refresh_token"); err == nil {
-		rt = c.Value
-	}
-	if rt == "" {
-		var body struct {
-			RefreshToken string `json:"refresh_token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-			rt = body.RefreshToken
-		}
-	}
+	rt := extractRefreshToken(r)
+
 	if rt == "" {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
 		return
@@ -139,9 +181,11 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 	tok, err := h.SVC.RefreshTokens(r.Context(), rt, ua, ip, "")
 	if err != nil {
 		code := http.StatusUnauthorized
+
 		if err == auth.ErrReuseDetected {
 			code = http.StatusForbidden
 		}
+
 		jsonResp(w, code, map[string]string{"error": err.Error()})
 		return
 	}
@@ -151,51 +195,35 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
-	rt := ""
-	if c, err := r.Cookie("refresh_token"); err == nil {
-		rt = c.Value
-	}
-	if rt == "" {
-		var body struct {
-			RefreshToken string `json:"refresh_token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-			rt = body.RefreshToken
-		}
-	}
+	rt := extractRefreshToken(r)
+
 	if rt == "" {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
 		return
 	}
+
 	if err := h.SVC.Logout(r.Context(), rt); err != nil {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+
 	clearAuthCookies(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
-	rt := ""
-	if c, err := r.Cookie("refresh_token"); err == nil {
-		rt = c.Value
-	}
-	if rt == "" {
-		var body struct {
-			RefreshToken string `json:"refresh_token"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
-			rt = body.RefreshToken
-		}
-	}
+	rt := extractRefreshToken(r)
+
 	if rt == "" {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
 		return
 	}
+
 	if err := h.SVC.LogoutAll(r.Context(), rt); err != nil {
 		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+
 	clearAuthCookies(w)
 	w.WriteHeader(http.StatusNoContent)
 }

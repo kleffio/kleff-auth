@@ -66,6 +66,20 @@ LIMIT 1;`
 	return em, un, nil
 }
 
+func (r *UserRepo) GetTenantIDByUser(ctx context.Context, userID string) (tenantID string, err error) {
+	const q = `
+SELECT tenant_id::text
+FROM users
+WHERE id = $1::uuid
+LIMIT 1;`
+
+	if err = r.db.Pool.QueryRow(ctx, q, userID).Scan(&tenantID); err != nil {
+		return "", errors.New("not_found")
+	}
+
+	return tenantID, nil
+}
+
 func (r *UserRepo) UpdatePasswordHash(ctx context.Context, userID, newHash string) error {
 	const q = `UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1;`
 
