@@ -15,17 +15,19 @@ RUN CGO_ENABLED=0 go build -tags netgo -ldflags="-s -w" -o /out/auth ./cmd/authd
 
 RUN upx -9 /out/auth
 
+FROM alpine:3.20 AS runtime
 
-FROM gcr.io/distroless/static:nonroot
+RUN apk add --no-cache ca-certificates curl
+
+RUN addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
 
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /out/auth /app/auth
 
 EXPOSE 8080
 
 ENV PORT=8080
 
-USER nonroot:nonroot
+USER app
 ENTRYPOINT ["/app/auth"]

@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: auth_api
+    container_name: auth_backend
     depends_on:
       auth-db:
         condition: service_healthy
@@ -38,10 +38,12 @@ services:
       - "${PORT_PUBLISH:-8080}:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz"]
+      test: [ "CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz" ]
       interval: 15s
       timeout: 3s
       retries: 5
+      start_period: 10s
+
 
 volumes:
   db_data:
