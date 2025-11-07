@@ -34,12 +34,6 @@ func getClientIP(r *http.Request) string {
 	return ""
 }
 
-func jsonResp(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
 func extractRefreshToken(r *http.Request) string {
 	if c, err := r.Cookie("refresh_token"); err == nil && c != nil {
 		v := strings.TrimSpace(c.Value)
@@ -118,19 +112,18 @@ func (h *AuthHandlers) JWKS(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(h.SVC.JWKS())
 }
 
-func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
 	var in auth.SignUpInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
-		return
+		return BadRequest("invalid json body")
 	}
+
 	in.IP = getClientIP(r)
 	in.UserAgent = r.UserAgent()
 
 	userID, tok, err := h.SVC.SignUp(r.Context(), in)
 	if err != nil {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return err
 	}
 
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
@@ -138,13 +131,13 @@ func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) {
 		"user_id": userID,
 		"session": tok,
 	})
+	return nil
 }
 
-func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
 	var in auth.SignInInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
-		return
+		return BadRequest("invalid json body")
 	}
 
 	in.IP = getClientIP(r)
@@ -152,8 +145,7 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) {
 
 	uid, email, username, tok, err := h.SVC.SignIn(r.Context(), in)
 	if err != nil {
-		jsonResp(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
-		return
+		return err
 	}
 
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
@@ -165,14 +157,13 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) {
 		},
 		"session": tok,
 	})
+	return nil
 }
 
-func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) error {
 	rt := extractRefreshToken(r)
-
 	if rt == "" {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
-		return
+		return BadRequest("missing refresh token")
 	}
 
 	ip := getClientIP(r)
@@ -180,67 +171,55 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	tok, err := h.SVC.RefreshTokens(r.Context(), rt, ua, ip, "")
 	if err != nil {
-		code := http.StatusUnauthorized
-
-		if err == auth.ErrReuseDetected {
-			code = http.StatusForbidden
-		}
-
-		jsonResp(w, code, map[string]string{"error": err.Error()})
-		return
+		return err
 	}
 
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
 	jsonResp(w, http.StatusOK, map[string]any{"session": tok})
+	return nil
 }
 
-func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) error {
 	rt := extractRefreshToken(r)
-
 	if rt == "" {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
-		return
+		return BadRequest("missing refresh token")
 	}
 
 	if err := h.SVC.Logout(r.Context(), rt); err != nil {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return err
 	}
 
 	clearAuthCookies(w)
 	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) error {
 	rt := extractRefreshToken(r)
-
 	if rt == "" {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": "missing refresh token"})
-		return
+		return BadRequest("missing refresh token")
 	}
 
 	if err := h.SVC.LogoutAll(r.Context(), rt); err != nil {
-		jsonResp(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
+		return err
 	}
 
 	clearAuthCookies(w)
 	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
-func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) error {
 	userID, _ := r.Context().Value(ctxUserID).(string)
 	tenantID, _ := r.Context().Value(ctxTenantID).(string)
 
 	if userID == "" || tenantID == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		return Unauthorized("missing or invalid authentication")
 	}
 
 	email, username, err := h.SVC.Me(r.Context(), tenantID, userID)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
+		return NotFound("user not found")
 	}
 
 	jsonResp(w, http.StatusOK, map[string]any{
@@ -251,4 +230,11 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) {
 			"email":     email,
 		},
 	})
+	return nil
+}
+
+func jsonResp(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
 }
