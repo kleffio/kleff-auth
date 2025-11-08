@@ -20,7 +20,8 @@ jobs:
               infrastructure/**/migrations/**/*.sql; do
             [ -e "$f" ] || continue
             echo "Checking $f"
-            grep -Eq "-- +up" "$f" || { echo "Missing -- up in $f"; fail=1; }
+            grep -Eq "-- +up" "$f" || \
+              { echo "Missing -- up in $f"; fail=1; }
             grep -Eq "-- +down" "$f" || { echo "Missing -- down in $f"; fail=1; }
           done
           exit $fail
