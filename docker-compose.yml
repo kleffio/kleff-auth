@@ -34,7 +34,10 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME: ${DB_NAME:-auth}
-      DATABASE_URL: ${DATABASE_URL:-postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@auth-db:5432/${DB_NAME:-auth}?sslmode=disable}
+      DATABASE_URL: >-
+        ${DATABASE_URL:-postgres://${DB_USER:-postgres}:
+        ${DB_PASSWORD:-postgres}@auth-db:5432/${DB_NAME:-auth}?
+        sslmode=disable}
       MIGRATE_ON_START: ${MIGRATE_ON_START:-false}
     ports:
       - "${PORT_PUBLISH:-8080}:8080"
