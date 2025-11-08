@@ -1,15 +1,16 @@
+---
 name: CI - Docker build & compose smoke test
 
 on:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-docker-${{ github.ref }}
+  group: ci-docker-${{github.ref}}
   cancel-in-progress: true
 
 jobs:
@@ -28,7 +29,7 @@ jobs:
         with:
           images: local/kleff-auth
           tags: |
-            type=raw,value=ci-${{ github.sha }}
+            type=raw,value=ci-${{github.sha}}
 
       - name: Build Dockerfile (no push)
         uses: docker/build-push-action@v6
@@ -38,7 +39,7 @@ jobs:
           platforms: linux/amd64
           push: false
           load: false
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{steps.meta.outputs.tags}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -53,18 +54,22 @@ jobs:
         run: |
           # Map API out to a non-privileged test port
           echo "PORT_PUBLISH=18080" >> .env
-          # Your compose already has sane defaults for DB_*; add/override here if needed:
+          # Your compose already has sane defaults for DB_*
+          # Add/override here if needed:
           # echo "DB_USER=postgres" >> .env
           # echo "DB_PASSWORD=postgres" >> .env
           # echo "DB_NAME=auth" >> .env
-          # Avoid running goose migrations in CI unless you want the full path exercised:
+          # Avoid running goose migrations in CI
+          # Unless you want the full path exercised:
           echo "MIGRATE_ON_START=false" >> .env
           # Ensure HTTP address binds correctly in container
           echo "HTTP_ADDR=:8080" >> .env
 
       - name: Docker Compose up (build & wait on healthchecks)
         run: |
-          docker compose -f docker-compose.yml up -d --build --wait --wait-timeout 120
+          docker compose -f docker-compose.yml up \
+            -d --build --wait \
+            --wait-timeout 120
 
       - name: Show compose ps
         run: docker compose ps
