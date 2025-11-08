@@ -1,9 +1,10 @@
+---
 name: Validate Migrations (optional)
 on:
   pull_request:
     paths:
-      - 'migrations/**'
-      - 'infrastructure/**/migrations/**'
+      - "migrations/**"
+      - "infrastructure/**/migrations/**"
 permissions:
   contents: read
 jobs:

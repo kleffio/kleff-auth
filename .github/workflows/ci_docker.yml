@@ -1,15 +1,16 @@
+---
 name: CI - Docker build & compose smoke test
 
 on:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-docker-${{ github.ref }}
+  group: ci-docker-${{github.ref}}
   cancel-in-progress: true
 
 jobs:
@@ -28,7 +29,7 @@ jobs:
         with:
           images: local/kleff-auth
           tags: |
-            type=raw,value=ci-${{ github.sha }}
+            type=raw,value=ci-${{github.sha}}
 
       - name: Build Dockerfile (no push)
         uses: docker/build-push-action@v6
@@ -38,7 +39,7 @@ jobs:
           platforms: linux/amd64
           push: false
           load: false
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{steps.meta.outputs.tags}}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

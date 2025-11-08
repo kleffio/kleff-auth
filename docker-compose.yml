@@ -1,3 +1,4 @@
+---
 services:
   auth-db:
     image: postgres:16-alpine
@@ -11,7 +12,8 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-auth}"]
+      test:
+        ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-auth}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,12 +40,11 @@ services:
       - "${PORT_PUBLISH:-8080}:8080"
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz" ]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
       interval: 15s
       timeout: 3s
       retries: 5
       start_period: 10s
-
 
 volumes:
   db_data:

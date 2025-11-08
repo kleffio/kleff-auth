@@ -1,3 +1,4 @@
+---
 name: CodeQL
 
 on:
@@ -5,7 +6,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: '0 2 * * 1'
+    - cron: "0 2 * * 1"
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
