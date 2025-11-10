@@ -1,9 +1,10 @@
+---
 name: Validate Migrations (optional)
 on:
   pull_request:
     paths:
-      - 'migrations/**'
-      - 'infrastructure/**/migrations/**'
+      - "migrations/**"
+      - "infrastructure/**/migrations/**"
 permissions:
   contents: read
 jobs:
@@ -15,10 +16,13 @@ jobs:
         run: |
           fail=0
           shopt -s globstar || true
-          for f in migrations/**/*.sql infrastructure/**/migrations/**/*.sql; do
+          for f in migrations/**/*.sql \
+              infrastructure/**/migrations/**/*.sql; do
             [ -e "$f" ] || continue
             echo "Checking $f"
-            grep -Eq "-- +up" "$f" || { echo "Missing -- up in $f"; fail=1; }
-            grep -Eq "-- +down" "$f" || { echo "Missing -- down in $f"; fail=1; }
+            grep -Eq "-- +up" "$f" || \
+              { echo "Missing -- up in $f"; fail=1; }
+            grep -Eq "-- +down" "$f" || \
+              { echo "Missing -- down in $f"; fail=1; }
           done
           exit $fail
