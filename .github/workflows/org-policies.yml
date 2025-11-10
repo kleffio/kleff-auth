@@ -1,12 +1,9 @@
-name: Org Policies
-
+name: CI Checks
 on:
   push:
-    branches: [ main ]
+    branches: ["**"]
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-  pull_request_target:
-    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 concurrency:
@@ -15,65 +12,64 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
+  security-events: write
+  id-token: write
 
 jobs:
-  # --- labeling (same-repo PRs) ---
-  auto-label:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-    permissions: { contents: read, pull-requests: write }
-    uses: kleffio/.github/.github/workflows/_auto-label.yml@main
-
-  # --- labeling (forked PRs) ---
-  auto-label-fork:
-    if: github.event_name == 'pull_request_target'
-    permissions: { contents: read, pull-requests: write }
-    uses: kleffio/.github/.github/workflows/_auto-label.yml@main
-
-  # --- PR-only checks (ordered after labeler in same-repo PRs) ---
-  pr-title:
-    if: github.event_name == 'pull_request'
-    needs: [auto-label]
-    uses: kleffio/.github/.github/workflows/_pr-title.yml@main
-    permissions: { contents: read, pull-requests: read }
-
-  require-label:
-    if: github.event_name == 'pull_request'
-    needs: [auto-label]
-    uses: kleffio/.github/.github/workflows/_require-label.yml@main
-    permissions: { contents: read, pull-requests: read }
-
-  auto-request-reviewers:
-    if: github.event_name == 'pull_request' && github.event.action == 'opened'
-    uses: kleffio/.github/.github/workflows/_auto-request-reviewers.yml@main
-    permissions: { contents: read, pull-requests: write }
-
-  # --- org-policy jobs: run on PRs AND on pushes to main ---
+  # --- Linting ---
   yamllint:
     name: YAML Lint
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_yaml-lint.yml@main
 
   actionlint:
     name: Action Lint
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_actionlint.yml@main
 
   shellcheck:
     name: Shell Check
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_shellcheck.yml@main
 
   hadolint:
     name: Dockerfile Lint
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_hadolint.yml@main
 
+  # --- PR-specific ---
+  auto-label:
+    name: Auto Label PR
+    if: github.event_name == 'pull_request'
+    uses: kleffio/.github/.github/workflows/_auto-label.yml@main
+    with:
+      unified_path: configs/labels.yml
+
+  pr-title:
+    name: PR Title Check
+    if: github.event_name == 'pull_request'
+    needs: [auto-label]
+    uses: kleffio/.github/.github/workflows/_pr-title.yml@main
+    with:
+      unified_path: configs/labels.yml
+
+  require-label:
+    name: Require Label
+    if: github.event_name == 'pull_request'
+    needs: [auto-label]
+    uses: kleffio/.github/.github/workflows/_require-label.yml@main
+    with:
+      unified_path: configs/labels.yml
+
+  auto-request-reviewers:
+    name: Auto Request Reviewers
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    uses: kleffio/.github/.github/workflows/_auto-request-reviewers.yml@main
+
+  # --- Compliance ---
   reuse:
     name: REUSE Compliance
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_reuse-compliance.yml@main
 
-  # --- main-only jobs ---
+  # --- Main-only ---
   openssf:
     name: OpenSSF Scorecard
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -83,3 +79,5 @@ jobs:
     name: Label Sync
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: kleffio/.github/.github/workflows/_label-sync.yml@main
+    with:
+      unified_path: configs/labels.yml
