@@ -17,53 +17,37 @@ permissions:
   contents: read
 
 jobs:
-  # ---- Labeling ----
-  # Same-repo PRs: run labeler inside the PR run
+  # --- labeling (same-repo PRs) ---
   auto-label:
-    name: Auto Label PR (same-repo)
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
-    permissions:
-      contents: read
-      pull-requests: write
+    permissions: { contents: read, pull-requests: write }
     uses: kleffio/.github/.github/workflows/_auto-label.yml@main
 
-  # Forked PRs: run labeler in pull_request_target
+  # --- labeling (forked PRs) ---
   auto-label-fork:
-    name: Auto Label PR (fork-safe)
     if: github.event_name == 'pull_request_target'
-    permissions:
-      contents: read
-      pull-requests: write
+    permissions: { contents: read, pull-requests: write }
     uses: kleffio/.github/.github/workflows/_auto-label.yml@main
 
-  # ---- PR-only checks (run once on PR runs) ----
+  # --- PR-only checks (ordered after labeler in same-repo PRs) ---
   pr-title:
-    name: PR Title Check
     if: github.event_name == 'pull_request'
     needs: [auto-label]
     uses: kleffio/.github/.github/workflows/_pr-title.yml@main
-    permissions:
-      contents: read
-      pull-requests: read
+    permissions: { contents: read, pull-requests: read }
 
   require-label:
-    name: Require Label
     if: github.event_name == 'pull_request'
     needs: [auto-label]
     uses: kleffio/.github/.github/workflows/_require-label.yml@main
-    permissions:
-      contents: read
-      pull-requests: read
+    permissions: { contents: read, pull-requests: read }
 
   auto-request-reviewers:
-    name: Auto Request Reviewers
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
     uses: kleffio/.github/.github/workflows/_auto-request-reviewers.yml@main
-    permissions:
-      contents: read
-      pull-requests: write
+    permissions: { contents: read, pull-requests: write }
 
-  # ---- Linters: run on PRs and on direct pushes to main ----
+  # --- org-policy jobs: run on PRs AND on pushes to main ---
   yamllint:
     name: YAML Lint
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
@@ -84,12 +68,12 @@ jobs:
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_hadolint.yml@main
 
-  # ---- Compliance / main-only jobs ----
   reuse:
     name: REUSE Compliance
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     uses: kleffio/.github/.github/workflows/_reuse-compliance.yml@main
 
+  # --- main-only jobs ---
   openssf:
     name: OpenSSF Scorecard
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
