@@ -50,16 +50,12 @@ jobs:
     name: Require Label
     if: github.event_name == 'pull_request'
     uses: kleffio/.github/.github/workflows/_require-label.yml@main
+    needs: [auto-label]
 
   auto-label:
     name: Auto Label PR
     if: github.event_name == 'pull_request'
     uses: kleffio/.github/.github/workflows/_auto-label.yml@main
-
-  size-labels:
-    name: PR Size Label
-    if: github.event_name == 'pull_request'
-    uses: kleffio/.github/.github/workflows/_size-labels.yml@main
 
   auto-request-reviewers:
     name: Auto Request Reviewers
