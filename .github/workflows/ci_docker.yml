@@ -1,4 +1,3 @@
----
 name: CI - Docker build & compose smoke test
 
 on:

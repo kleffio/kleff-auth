@@ -1,4 +1,3 @@
----
 name: Lint (golangci-lint)
 on:
   pull_request:
