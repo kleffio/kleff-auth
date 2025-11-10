@@ -41,7 +41,7 @@ jobs:
     if: github.event_name == 'pull_request'
     uses: kleffio/.github/.github/workflows/_auto-label.yml@main
     with:
-      unified_path: configs/labels.yml
+      unified_path: configs/labels.json
 
   pr-title:
     name: PR Title Check
@@ -49,7 +49,7 @@ jobs:
     needs: [auto-label]
     uses: kleffio/.github/.github/workflows/_pr-title.yml@main
     with:
-      unified_path: configs/labels.yml
+      unified_path: configs/labels.json
 
   require-label:
     name: Require Label
@@ -57,7 +57,7 @@ jobs:
     needs: [auto-label]
     uses: kleffio/.github/.github/workflows/_require-label.yml@main
     with:
-      unified_path: configs/labels.yml
+      unified_path: configs/labels.json
 
   auto-request-reviewers:
     name: Auto Request Reviewers
@@ -80,4 +80,4 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: kleffio/.github/.github/workflows/_label-sync.yml@main
     with:
-      unified_path: configs/labels.yml
+      unified_path: configs/labels.json
