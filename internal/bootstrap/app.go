@@ -8,17 +8,17 @@ import (
 	"time"
 
 	httpad "github.com/kleffio/kleff-auth/internal/adapters/in/http"
-	cryptoad "github.com/kleffio/kleff-auth/internal/adapters/out/hash/argon2"
-	"github.com/kleffio/kleff-auth/internal/adapters/out/repository/postgres"
-	"github.com/kleffio/kleff-auth/internal/adapters/out/token/eddsa"
-	"github.com/kleffio/kleff-auth/internal/adapters/out/token/refresh"
+	hashargon "github.com/kleffio/kleff-auth/internal/adapters/out/hash/argon2"
+	pg "github.com/kleffio/kleff-auth/internal/adapters/out/repository/postgres"
+	tokeneddsa "github.com/kleffio/kleff-auth/internal/adapters/out/token/eddsa"
+	tokenrefresh "github.com/kleffio/kleff-auth/internal/adapters/out/token/refresh"
 	"github.com/kleffio/kleff-auth/internal/config"
 	app "github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
 
 type App struct {
 	Server *http.Server
-	DB     *postgres.DB
+	DB     *pg.DB
 }
 
 // NewApp wires DB, crypto, repos, service, and HTTP server.
@@ -36,19 +36,19 @@ func NewApp(ctx context.Context) (*App, error) {
 	// --- Crypto --- //
 
 	issuer := config.GetEnv("JWT_ISSUER", "http://localhost:8080")
-	signer, err := eddsa.NewInMemorySigner(issuer)
+	signer, err := tokeneddsa.NewInMemorySigner(issuer)
 	if err != nil {
 		db.Pool.Close()
 		return nil, err
 	}
 
-	hasher := cryptoad.NewArgon2id()
-	refreshCodec := &refresh.Codec{Hasher: hasher}
+	hasher := hashargon.NewArgon2id()
+	refreshCodec := &tokenrefresh.Codec{Hasher: hasher}
 
 	// --- Repos --- //
-	tenantRepo := postgres.NewTenantRepo(db)
-	userRepo := postgres.NewUserRepo(db)
-	sessionRepo := postgres.NewSessionRepo(db)
+	tenantRepo := pg.NewTenantRepo(db)
+	userRepo := pg.NewUserRepo(db)
+	sessionRepo := pg.NewSessionRepo(db)
 
 	// --- Application service --- //
 	svc := &app.Service{
