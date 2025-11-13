@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kleffio/kleff-auth/internal/infrastructure/bootstrap"
+	"github.com/kleffio/kleff-auth/internal/bootstrap"
 )
 
 func main() {

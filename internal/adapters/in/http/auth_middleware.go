@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kleffio/kleff-auth/internal/application/auth"
+	"github.com/kleffio/kleff-auth/internal/core/port/auth"
 )
 
 type ctxKey string

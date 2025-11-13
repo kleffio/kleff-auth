@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kleffio/kleff-auth/internal/application/auth"
+	auth2 "github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
 
 type AuthHandlers struct {
-	SVC *auth.Service
+	SVC *auth2.Service
 }
 
 type refreshBody struct {
@@ -120,7 +120,7 @@ func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
 		return BadRequest("invalid json body")
 	}
 
-	in := auth.SignUpInput{
+	in := auth2.SignUpInput{
 		Tenant:    req.Tenant,
 		Email:     req.Email,
 		Username:  req.Username,
@@ -156,7 +156,7 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
 		return BadRequest("invalid json body")
 	}
 
-	in := auth.SignInInput{
+	in := auth2.SignInInput{
 		Tenant:     req.Tenant,
 		Identifier: req.Identifier,
 		Password:   req.Password,

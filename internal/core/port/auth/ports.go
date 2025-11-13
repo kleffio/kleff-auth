@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	domain "github.com/kleffio/kleff-auth/internal/domain/auth"
+	domain "github.com/kleffio/kleff-auth/internal/core/domain/auth"
 )
 
 type TenantRepoPort interface {

@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	domain "github.com/kleffio/kleff-auth/internal/domain/auth"
+	domain "github.com/kleffio/kleff-auth/internal/core/domain/auth"
+	auth2 "github.com/kleffio/kleff-auth/internal/core/port/auth"
 )
 
 var (
@@ -18,13 +19,13 @@ var (
 )
 
 type Service struct {
-	Tenants  TenantRepoPort
-	Users    UserRepoPort
-	Hash     PasswordHasherPort
-	Tokens   TokenSignerPort
-	Sessions SessionRepoPort
-	Refresh  RefreshTokenPort
-	Time     TimeProvider
+	Tenants  auth2.TenantRepoPort
+	Users    auth2.UserRepoPort
+	Hash     auth2.PasswordHasherPort
+	Tokens   auth2.TokenSignerPort
+	Sessions auth2.SessionRepoPort
+	Refresh  auth2.RefreshTokenPort
+	Time     auth2.TimeProvider
 
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration

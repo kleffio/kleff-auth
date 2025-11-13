@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/kleffio/kleff-auth/internal/utils"
+	"github.com/kleffio/kleff-auth/internal/config"
 )
 
 type DB struct {
@@ -14,11 +14,11 @@ type DB struct {
 }
 
 func ConnectFromEnv(ctx context.Context) (*DB, error) {
-	host := utils.GetEnv("DB_HOST", "localhost")
-	port := utils.GetEnv("DB_PORT", "5432")
-	user := utils.GetEnv("DB_USER", "postgres")
-	pass := utils.GetEnv("DB_PASSWORD", "kleff")
-	name := utils.GetEnv("DB_NAME", "kleff_auth")
+	host := config.GetEnv("DB_HOST", "localhost")
+	port := config.GetEnv("DB_PORT", "5432")
+	user := config.GetEnv("DB_USER", "postgres")
+	pass := config.GetEnv("DB_PASSWORD", "kleff")
+	name := config.GetEnv("DB_NAME", "kleff_auth")
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, pass, host, port, name)
 

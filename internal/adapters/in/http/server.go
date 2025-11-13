@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kleffio/kleff-auth/internal/application/auth"
+	"github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
 
 func NewRouter(svc *auth.Service) http.Handler {

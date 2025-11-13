@@ -8,10 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-
-	pg "github.com/kleffio/kleff-auth/internal/adapters/out/postgres"
-	infraDB "github.com/kleffio/kleff-auth/internal/infrastructure/db"
-	"github.com/kleffio/kleff-auth/internal/utils"
+	pg "github.com/kleffio/kleff-auth/internal/adapters/out/repository/postgres"
+	"github.com/kleffio/kleff-auth/internal/adapters/out/repository/postgres/migrations"
+	"github.com/kleffio/kleff-auth/internal/config"
 )
 
 // SetupDatabase is the one-stop DB bootstrap:
@@ -21,7 +20,7 @@ import (
 //  4. logs the current database name
 func SetupDatabase(ctx context.Context) (*pg.DB, error) {
 	// Ensure DB exists, if requested
-	if utils.GetEnv("DB_CREATE", "false") == "true" {
+	if config.GetEnv("DB_CREATE", "false") == "true" {
 		if err := ensureDatabase(ctx); err != nil {
 			return nil, fmt.Errorf("ensure db: %w", err)
 		}
@@ -34,17 +33,17 @@ func SetupDatabase(ctx context.Context) (*pg.DB, error) {
 	}
 
 	// Run migrations, if requested
-	if utils.GetEnv("MIGRATE_ON_START", "false") == "true" {
+	if config.GetEnv("MIGRATE_ON_START", "false") == "true" {
 		dsn := fmt.Sprintf(
 			"postgres://%s:%s@%s:%s/%s?sslmode=disable",
-			utils.GetEnv("DB_USER", "postgres"),
-			utils.GetEnv("DB_PASSWORD", ""),
-			utils.GetEnv("DB_HOST", "localhost"),
-			utils.GetEnv("DB_PORT", "5432"),
-			utils.GetEnv("DB_NAME", "kleff_auth"),
+			config.GetEnv("DB_USER", "postgres"),
+			config.GetEnv("DB_PASSWORD", ""),
+			config.GetEnv("DB_HOST", "localhost"),
+			config.GetEnv("DB_PORT", "5432"),
+			config.GetEnv("DB_NAME", "kleff_auth"),
 		)
 
-		if err := infraDB.Run(ctx, dsn); err != nil {
+		if err := migrations.Run(ctx, dsn); err != nil {
 			// clean up on failure
 			db.Pool.Close()
 			return nil, fmt.Errorf("db migrate: %w", err)
@@ -63,11 +62,11 @@ func SetupDatabase(ctx context.Context) (*pg.DB, error) {
 // ensureDatabase contains the old logic from db_create.go,
 // but kept private and local to the bootstrap package.
 func ensureDatabase(ctx context.Context) error {
-	host := utils.GetEnv("DB_HOST", "localhost")
-	port := utils.GetEnv("DB_PORT", "5432")
-	user := utils.GetEnv("DB_USER", "postgres")
-	pass := utils.GetEnv("DB_PASSWORD", "")
-	name := utils.GetEnv("DB_NAME", "kleff_auth")
+	host := config.GetEnv("DB_HOST", "localhost")
+	port := config.GetEnv("DB_PORT", "5432")
+	user := config.GetEnv("DB_USER", "postgres")
+	pass := config.GetEnv("DB_PASSWORD", "")
+	name := config.GetEnv("DB_NAME", "kleff_auth")
 
 	maintURL := fmt.Sprintf("postgres://%s:%s@%s:%s/postgres", user, pass, host, port)
 

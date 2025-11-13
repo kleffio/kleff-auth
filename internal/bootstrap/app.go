@@ -9,20 +9,20 @@ import (
 
 	httpad "github.com/kleffio/kleff-auth/internal/adapters/in/http"
 	cryptoad "github.com/kleffio/kleff-auth/internal/adapters/out/crypto"
-	pg "github.com/kleffio/kleff-auth/internal/adapters/out/postgres"
-	app "github.com/kleffio/kleff-auth/internal/application/auth"
-	"github.com/kleffio/kleff-auth/internal/utils"
+	"github.com/kleffio/kleff-auth/internal/adapters/out/repository/postgres"
+	"github.com/kleffio/kleff-auth/internal/config"
+	app "github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
 
 type App struct {
 	Server *http.Server
-	DB     *pg.DB
+	DB     *postgres.DB
 }
 
 // NewApp wires DB, crypto, repos, service, and HTTP server.
 func NewApp(ctx context.Context) (*App, error) {
 	// Load env once here
-	utils.LoadEnv()
+	config.LoadEnv()
 
 	// --- DB bootstrap --- //
 
@@ -33,7 +33,7 @@ func NewApp(ctx context.Context) (*App, error) {
 
 	// --- Crypto --- //
 
-	issuer := utils.GetEnv("JWT_ISSUER", "http://localhost:8080")
+	issuer := config.GetEnv("JWT_ISSUER", "http://localhost:8080")
 	signer, err := cryptoad.NewInMemorySigner(issuer)
 	if err != nil {
 		db.Pool.Close()
@@ -44,9 +44,9 @@ func NewApp(ctx context.Context) (*App, error) {
 	refreshCodec := &cryptoad.RefreshCodec{Hasher: hasher}
 
 	// --- Repos --- //
-	tenantRepo := pg.NewTenantRepo(db)
-	userRepo := pg.NewUserRepo(db)
-	sessionRepo := pg.NewSessionRepo(db)
+	tenantRepo := postgres.NewTenantRepo(db)
+	userRepo := postgres.NewUserRepo(db)
+	sessionRepo := postgres.NewSessionRepo(db)
 
 	// --- Application service --- //
 	svc := &app.Service{
@@ -63,7 +63,7 @@ func NewApp(ctx context.Context) (*App, error) {
 
 	// --- HTTP server --- //
 	mux := httpad.NewRouter(svc)
-	addr := utils.GetEnv("HTTP_ADDR", ":8080")
+	addr := config.GetEnv("HTTP_ADDR", ":8080")
 
 	srv := &http.Server{
 		Addr:              addr,

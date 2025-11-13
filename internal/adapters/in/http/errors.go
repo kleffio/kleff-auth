@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/kleffio/kleff-auth/internal/application/auth"
+	"github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
 
 type HTTPError struct {
