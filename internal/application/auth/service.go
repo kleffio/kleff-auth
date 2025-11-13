@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/kleffio/kleff-auth/internal/domain"
+	domain "github.com/kleffio/kleff-auth/internal/domain/auth"
 )
 
 var (
