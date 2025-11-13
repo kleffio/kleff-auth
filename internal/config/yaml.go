@@ -83,6 +83,7 @@ func LoadRuntimeConfig(path string) (*RuntimeConfig, error) {
 		return nil, fmt.Errorf("config path %q is outside allowed root %q", targetAbs, configRoot)
 	}
 
+	// #nosec G304 -- targetAbs is constrained under KLEFF_CONFIG_ROOT via getConfigRoot + prefix check
 	data, err := os.ReadFile(targetAbs)
 	if err != nil {
 		return nil, fmt.Errorf("read runtime config %q: %w", targetAbs, err)

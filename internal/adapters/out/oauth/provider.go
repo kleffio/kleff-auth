@@ -64,7 +64,7 @@ func (p *Provider) ExchangeCode(ctx context.Context, provider string, cfg *domai
 }
 
 func (p *Provider) exchangeGoogleCode(ctx context.Context, cfg *domain.OAuthProviderConfig, code string) (*domain.OAuthIdentity, error) {
-	// gosec: G101 -- this is a public Google OAuth token endpoint, not a credential
+	// #nosec G101 -- public Google OAuth token endpoint, not a credential
 	tokenURL := "https://oauth2.googleapis.com/token"
 	data := url.Values{
 		"code":          {code},
@@ -123,7 +123,7 @@ func (p *Provider) exchangeGoogleCode(ctx context.Context, cfg *domain.OAuthProv
 }
 
 func (p *Provider) exchangeGitHubCode(ctx context.Context, cfg *domain.OAuthProviderConfig, code string) (*domain.OAuthIdentity, error) {
-	// gosec: G101 -- this is a public Google OAuth token endpoint, not a credential
+	// #nosec G101 -- public Google OAuth token endpoint, not a credential
 	tokenURL := "https://github.com/login/oauth/access_token"
 	data := url.Values{
 		"code":          {code},
