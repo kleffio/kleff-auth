@@ -112,40 +112,68 @@ func (h *AuthHandlers) JWKS(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(h.SVC.JWKS())
 }
 
+// --- Handlers using HTTP DTOs -> application DTOs ---
+
 func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
-	var in auth.SignUpInput
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var req signUpRequestDTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return BadRequest("invalid json body")
 	}
 
-	in.IP = getClientIP(r)
-	in.UserAgent = r.UserAgent()
+	in := auth.SignUpInput{
+		Tenant:    req.Tenant,
+		Email:     req.Email,
+		Username:  req.Username,
+		Password:  req.Password,
+		AttrsJSON: req.AttrsJSON,
+		IP:        getClientIP(r),
+		UserAgent: r.UserAgent(),
+	}
 
 	userID, tok, err := h.SVC.SignUp(r.Context(), in)
 	if err != nil {
 		return err
 	}
 
+	session := tokenResponseDTO{
+		AccessToken:  tok.AccessToken,
+		RefreshToken: tok.RefreshToken,
+		ExpiresInSec: tok.ExpiresInSec,
+		TokenType:    tok.TokenType,
+	}
+
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
 	jsonResp(w, http.StatusOK, map[string]any{
 		"user_id": userID,
-		"session": tok,
+		"session": session,
 	})
 	return nil
 }
 
 func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
-	var in auth.SignInInput
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	var req signInRequestDTO
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return BadRequest("invalid json body")
 	}
 
-	in.IP = getClientIP(r)
-	in.UserAgent = r.UserAgent()
+	in := auth.SignInInput{
+		Tenant:     req.Tenant,
+		Identifier: req.Identifier,
+		Password:   req.Password,
+		IP:         getClientIP(r),
+		UserAgent:  r.UserAgent(),
+	}
 
 	uid, email, username, tok, err := h.SVC.SignIn(r.Context(), in)
 	if err != nil {
 		return err
+	}
+
+	session := tokenResponseDTO{
+		AccessToken:  tok.AccessToken,
+		RefreshToken: tok.RefreshToken,
+		ExpiresInSec: tok.ExpiresInSec,
+		TokenType:    tok.TokenType,
 	}
 
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
@@ -155,8 +183,9 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
 			"email":    email,
 			"username": username,
 		},
-		"session": tok,
+		"session": session,
 	})
+
 	return nil
 }
 
@@ -174,8 +203,16 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
+	session := tokenResponseDTO{
+		AccessToken:  tok.AccessToken,
+		RefreshToken: tok.RefreshToken,
+		ExpiresInSec: tok.ExpiresInSec,
+		TokenType:    tok.TokenType,
+	}
+
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
-	jsonResp(w, http.StatusOK, map[string]any{"session": tok})
+	jsonResp(w, http.StatusOK, map[string]any{"session": session})
+
 	return nil
 }
 

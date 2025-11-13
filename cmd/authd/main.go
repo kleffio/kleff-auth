@@ -20,15 +20,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("bootstrap: %v", err)
 	}
+	defer app.Close()
 
-	// start HTTP server
+	// Start HTTP server
 	go func() {
 		if err := app.Run(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %v", err)
 		}
 	}()
 
-	// graceful shutdown
+	// Graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
@@ -40,10 +41,5 @@ func main() {
 		log.Printf("graceful shutdown failed: %v", err)
 	} else {
 		log.Printf("server stopped")
-	}
-
-	// close DB, etc.
-	if err := app.Shutdown(context.Background()); err != nil {
-		log.Printf("cleanup failed: %v", err)
 	}
 }

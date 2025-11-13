@@ -1,8 +1,8 @@
+// internal/infrastructure/bootstrap/app.go
 package bootstrap
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -14,18 +14,18 @@ import (
 	"github.com/kleffio/kleff-auth/internal/utils"
 )
 
-// App represents the fully-wired application.
 type App struct {
-	Server   *http.Server
-	Shutdown func(ctx context.Context) error
+	Server *http.Server
+	DB     *pg.DB
 }
 
-// NewApp wires the DB, crypto, repositories, service and HTTP server.
+// NewApp wires DB, crypto, repos, service, and HTTP server.
 func NewApp(ctx context.Context) (*App, error) {
-	// Load .env
+	// Load env once here
 	utils.LoadEnv()
 
-	// --- DB bootstrap (create + migrate + connect) --- //
+	// --- DB bootstrap --- //
+
 	db, err := SetupDatabase(ctx)
 	if err != nil {
 		return nil, err
@@ -37,20 +37,18 @@ func NewApp(ctx context.Context) (*App, error) {
 	signer, err := cryptoad.NewInMemorySigner(issuer)
 	if err != nil {
 		db.Pool.Close()
-		return nil, fmt.Errorf("signer: %w", err)
+		return nil, err
 	}
 
 	hasher := cryptoad.NewArgon2id()
 	refreshCodec := &cryptoad.RefreshCodec{Hasher: hasher}
 
-	// --- Repositories --- //
-
+	// --- Repos --- //
 	tenantRepo := pg.NewTenantRepo(db)
 	userRepo := pg.NewUserRepo(db)
 	sessionRepo := pg.NewSessionRepo(db)
 
 	// --- Application service --- //
-
 	svc := &app.Service{
 		Tenants:  tenantRepo,
 		Users:    userRepo,
@@ -64,10 +62,9 @@ func NewApp(ctx context.Context) (*App, error) {
 	}
 
 	// --- HTTP server --- //
-
 	mux := httpad.NewRouter(svc)
-
 	addr := utils.GetEnv("HTTP_ADDR", ":8080")
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           mux,
@@ -78,19 +75,22 @@ func NewApp(ctx context.Context) (*App, error) {
 		MaxHeaderBytes:    1 << 20,
 	}
 
-	appInstance := &App{
-		Server: srv,
-		Shutdown: func(_ context.Context) error {
-			db.Pool.Close()
-			return nil
-		},
-	}
+	log.Printf("authd listening on %s", addr)
 
-	return appInstance, nil
+	return &App{
+		Server: srv,
+		DB:     db,
+	}, nil
 }
 
-// Run is a convenience helper to start the HTTP server.
+// Run starts the HTTP server.
 func (a *App) Run() error {
-	log.Printf("authd listening on %s", a.Server.Addr)
 	return a.Server.ListenAndServe()
+}
+
+// Close cleanly shuts down shared resources like the DB pool.
+func (a *App) Close() {
+	if a.DB != nil {
+		a.DB.Pool.Close()
+	}
 }
