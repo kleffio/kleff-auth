@@ -8,8 +8,10 @@ import (
 	"time"
 
 	httpad "github.com/kleffio/kleff-auth/internal/adapters/in/http"
-	cryptoad "github.com/kleffio/kleff-auth/internal/adapters/out/crypto"
+	cryptoad "github.com/kleffio/kleff-auth/internal/adapters/out/hash/argon2"
 	"github.com/kleffio/kleff-auth/internal/adapters/out/repository/postgres"
+	"github.com/kleffio/kleff-auth/internal/adapters/out/token/eddsa"
+	"github.com/kleffio/kleff-auth/internal/adapters/out/token/refresh"
 	"github.com/kleffio/kleff-auth/internal/config"
 	app "github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
@@ -34,14 +36,14 @@ func NewApp(ctx context.Context) (*App, error) {
 	// --- Crypto --- //
 
 	issuer := config.GetEnv("JWT_ISSUER", "http://localhost:8080")
-	signer, err := cryptoad.NewInMemorySigner(issuer)
+	signer, err := eddsa.NewInMemorySigner(issuer)
 	if err != nil {
 		db.Pool.Close()
 		return nil, err
 	}
 
 	hasher := cryptoad.NewArgon2id()
-	refreshCodec := &cryptoad.RefreshCodec{Hasher: hasher}
+	refreshCodec := &refresh.Codec{Hasher: hasher}
 
 	// --- Repos --- //
 	tenantRepo := postgres.NewTenantRepo(db)

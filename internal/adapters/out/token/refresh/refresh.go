@@ -1,4 +1,4 @@
-package crypto
+package refresh
 
 import (
 	"crypto/rand"
@@ -8,13 +8,14 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/kleffio/kleff-auth/internal/adapters/out/hash/argon2"
 )
 
-type RefreshCodec struct {
-	Hasher *Argon2id
+type Codec struct {
+	Hasher *argon2.Argon2id
 }
 
-func (c *RefreshCodec) Generate() ([]byte, []byte, error) {
+func (c *Codec) Generate() ([]byte, []byte, error) {
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		return nil, nil, err
@@ -28,7 +29,7 @@ func (c *RefreshCodec) Generate() ([]byte, []byte, error) {
 	return secret, []byte(enc), nil
 }
 
-func (c *RefreshCodec) Verify(hash, raw []byte) error {
+func (c *Codec) Verify(hash, raw []byte) error {
 	ok, err := c.Hasher.Verify(base64.RawURLEncoding.EncodeToString(raw), string(hash))
 	if err != nil || !ok {
 		return errors.New("invalid refresh")
@@ -37,12 +38,12 @@ func (c *RefreshCodec) Verify(hash, raw []byte) error {
 	return nil
 }
 
-func (c *RefreshCodec) Encode(sessionID uuid.UUID, secret []byte) string {
+func (c *Codec) Encode(sessionID uuid.UUID, secret []byte) string {
 	return base64.RawURLEncoding.EncodeToString(sessionID[:]) + "." +
 		base64.RawURLEncoding.EncodeToString(secret)
 }
 
-func (c *RefreshCodec) Parse(rt string) (uuid.UUID, []byte, error) {
+func (c *Codec) Parse(rt string) (uuid.UUID, []byte, error) {
 	parts := strings.Split(rt, ".")
 	if len(parts) != 2 {
 		return uuid.Nil, nil, fmt.Errorf("bad refresh token format: expected 2 parts, got %d", len(parts))

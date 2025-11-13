@@ -1,6 +1,8 @@
-package crypto
+package argon2
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestArgon2id(t *testing.T) {
 	a := NewArgon2id()

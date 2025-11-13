@@ -1,5 +1,4 @@
-// internal/adapters/crypto/eddsa_signer.go
-package crypto
+package eddsa
 
 import (
 	"crypto/ed25519"
