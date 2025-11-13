@@ -5,6 +5,8 @@
 *.test
 *.prof
 
+kleff-auth-cli
+
 vendor/
 bin/
 
@@ -20,6 +22,8 @@ Thumbs.db
 *.bak
 
 .env
+.env.local
+.env.*.local
 
 log/
 tmp/

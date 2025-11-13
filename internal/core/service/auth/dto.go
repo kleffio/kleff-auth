@@ -24,3 +24,12 @@ type TokenOutput struct {
 	ExpiresInSec int
 	TokenType    string
 }
+
+type OAuthStartInput struct {
+	Provider    string
+	Tenant      string
+	ClientID    string
+	RedirectURI string
+	IP          string
+	UserAgent   string
+}

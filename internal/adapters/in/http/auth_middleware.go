@@ -24,18 +24,21 @@ func (m *AuthMiddleware) WithAuth(next http.Handler) http.Handler {
 		tok := extractBearer(r.Header.Get("Authorization"))
 		if tok == "" {
 			if c, err := r.Cookie("access_token"); err == nil {
-				tok = c.Value
+				tok = strings.TrimSpace(c.Value)
 			}
 		}
+
 		if tok == "" {
-			http.Error(w, "missing token", http.StatusUnauthorized)
+			respondWithError(w, http.StatusUnauthorized, "missing token", nil)
 			return
 		}
+
 		sub, tid, err := m.Tokens.ParseAccess(tok)
 		if err != nil {
-			http.Error(w, "invalid token", http.StatusUnauthorized)
+			respondWithError(w, http.StatusUnauthorized, "invalid token", nil)
 			return
 		}
+
 		ctx := context.WithValue(r.Context(), ctxUserID, sub)
 		ctx = context.WithValue(ctx, ctxTenantID, tid)
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -2,30 +2,40 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net"
 	"time"
 
 	"github.com/google/uuid"
 	domain "github.com/kleffio/kleff-auth/internal/core/domain/auth"
-	auth2 "github.com/kleffio/kleff-auth/internal/core/port/auth"
+	"github.com/kleffio/kleff-auth/internal/core/port/auth"
 )
 
 var (
-	ErrUnknownTenant      = errors.New("unknown tenant")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidRefresh     = errors.New("invalid refresh")
-	ErrReuseDetected      = errors.New("refresh reuse detected")
+	ErrUnknownTenant       = errors.New("unknown tenant")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrInvalidRefresh      = errors.New("invalid refresh")
+	ErrReuseDetected       = errors.New("refresh reuse detected")
+	ErrInvalidClient       = errors.New("invalid oauth client")
+	ErrInvalidRedirectURI  = errors.New("invalid redirect uri")
+	ErrUnsupportedProvider = errors.New("unsupported oauth provider")
+	ErrInvalidState        = errors.New("invalid oauth state")
 )
 
 type Service struct {
-	Tenants  auth2.TenantRepoPort
-	Users    auth2.UserRepoPort
-	Hash     auth2.PasswordHasherPort
-	Tokens   auth2.TokenSignerPort
-	Sessions auth2.SessionRepoPort
-	Refresh  auth2.RefreshTokenPort
-	Time     auth2.TimeProvider
+	Tenants  auth.TenantRepoPort
+	Users    auth.UserRepoPort
+	Hash     auth.PasswordHasherPort
+	Tokens   auth.TokenSignerPort
+	Sessions auth.SessionRepoPort
+	Refresh  auth.RefreshTokenPort
+	Time     auth.TimeProvider
+
+	OAuthProviders auth.OAuthProviderPort
+	OAuthUsers     auth.OAuthUserRepoPort
+	OAuthClients   auth.OAuthClientRepoPort
+	OAuthState     auth.OAuthStateCodecPort
 
 	AccessTTL  time.Duration
 	RefreshTTL time.Duration
@@ -256,6 +266,159 @@ func (s *Service) LogoutAll(ctx context.Context, refreshToken string) error {
 
 func (s *Service) Me(ctx context.Context, tenantID, userID string) (email *string, username *string, err error) {
 	return s.Users.GetUserByID(ctx, tenantID, userID)
+}
+
+func (s *Service) BuildOAuthRedirectURL(ctx context.Context, in OAuthStartInput) (string, error) {
+	if s.OAuthProviders == nil || s.OAuthClients == nil || s.OAuthState == nil {
+		return "", errors.New("oauth not configured")
+	}
+
+	if in.Tenant == "" {
+		return "", ErrUnknownTenant
+	}
+
+	tenantID, err := s.Tenants.ResolveTenantID(ctx, in.Tenant)
+	if err != nil {
+		return "", ErrUnknownTenant
+	}
+
+	client, err := s.OAuthClients.GetOAuthClient(ctx, tenantID, in.ClientID, in.Provider)
+	if err != nil {
+		return "", ErrInvalidClient
+	}
+
+	if !client.AllowsRedirect(in.RedirectURI) {
+		return "", ErrInvalidRedirectURI
+	}
+
+	providerCfg, ok := client.Providers[in.Provider]
+	if !ok {
+		return "", ErrUnsupportedProvider
+	}
+
+	statePayload := &domain.OAuthState{
+		TenantID:    tenantID,
+		TenantSlug:  in.Tenant,
+		ClientID:    in.ClientID,
+		RedirectURI: in.RedirectURI,
+		Nonce:       uuid.NewString(),
+		IssuedAt:    s.nowUTC(),
+	}
+
+	stateStr, err := s.OAuthState.Encode(statePayload)
+	if err != nil {
+		return "", err
+	}
+
+	return s.OAuthProviders.BuildAuthURL(ctx, in.Provider, &providerCfg, stateStr)
+}
+
+func (s *Service) HandleOAuthCallback(
+	ctx context.Context,
+	provider, code, stateStr, ip, userAgent string,
+) (userID string, email, username *string, tok TokenOutput, err error) {
+	if s.OAuthProviders == nil || s.OAuthUsers == nil || s.OAuthState == nil || s.OAuthClients == nil {
+		err = errors.New("oauth not configured")
+		return
+	}
+
+	state, err := s.OAuthState.Decode(stateStr)
+	if err != nil {
+		err = ErrInvalidState
+		return
+	}
+
+	client, err := s.OAuthClients.GetOAuthClient(ctx, state.TenantID, state.ClientID, provider)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = ErrInvalidClient
+		}
+		return
+	}
+
+	providerCfg, ok := client.Providers[provider]
+	if !ok {
+		err = ErrUnsupportedProvider
+		return
+	}
+
+	identity, err := s.OAuthProviders.ExchangeCode(ctx, provider, &providerCfg, code)
+	if err != nil {
+		return
+	}
+
+	if identity != nil && identity.TenantSlug == "" {
+		identity.TenantSlug = state.TenantSlug
+	}
+
+	var (
+		tenantID = state.TenantID
+		uid      string
+		em, un   *string
+	)
+
+	if tID, uID, emFound, unFound, e := s.OAuthUsers.GetUserByOAuth(
+		ctx,
+		identity.Provider,
+		identity.ProviderUserID,
+	); e == nil && uID != "" {
+		tenantID = tID
+		uid = uID
+		em = emFound
+		un = unFound
+	} else {
+		tID, uID, e := s.OAuthUsers.CreateUserFromOAuth(ctx, identity)
+		if e != nil {
+			err = e
+			return
+		}
+		tenantID = tID
+		uid = uID
+		em = identity.Email
+		un = identity.Username
+	}
+
+	jti := uuid.NewString()
+	access, err := s.Tokens.IssueAccess(uid, tenantID, "openid profile", jti, s.AccessTTL)
+	if err != nil {
+		return
+	}
+
+	sid := uuid.New()
+	raw, rhash, err := s.Refresh.Generate()
+	if err != nil {
+		return
+	}
+
+	now := s.nowUTC()
+	sess := &domain.Session{
+		ID:          sid,
+		UserID:      uuid.MustParse(uid),
+		FamilyID:    uuid.New(),
+		RefreshHash: rhash,
+		UserAgent:   userAgent,
+		IP:          net.ParseIP(ip),
+		CreatedAt:   now,
+		LastUsedAt:  now,
+		ExpiresAt:   now.Add(s.RefreshTTL),
+	}
+	if err = s.Sessions.Create(ctx, sess); err != nil {
+		return
+	}
+
+	refresh := s.Refresh.Encode(sid, raw)
+
+	tok = TokenOutput{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		ExpiresInSec: int(s.AccessTTL.Seconds()),
+		TokenType:    "Bearer",
+	}
+
+	userID = uid
+	email = em
+	username = un
+	return
 }
 
 func (s *Service) nowUTC() time.Time {

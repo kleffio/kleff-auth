@@ -4,38 +4,40 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
 
-	auth2 "github.com/kleffio/kleff-auth/internal/core/service/auth"
+	"github.com/go-chi/chi/v5"
+	"github.com/kleffio/kleff-auth/internal/core/service/auth"
 )
 
 type AuthHandlers struct {
-	SVC *auth2.Service
+	SVC *auth.Service
 }
 
 type refreshBody struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
-func getClientIP(r *http.Request) string {
-	if xf := r.Header.Get("X-Forwarded-For"); xf != "" {
+func getClientIP(request *http.Request) string {
+	if xf := request.Header.Get("X-Forwarded-For"); xf != "" {
 		parts := strings.Split(xf, ",")
 		return strings.TrimSpace(parts[0])
 	}
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+	if xri := request.Header.Get("X-Real-IP"); xri != "" {
 		return xri
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err == nil {
 		return host
 	}
 	return ""
 }
 
-func extractRefreshToken(r *http.Request) string {
-	if c, err := r.Cookie("refresh_token"); err == nil && c != nil {
+func extractRefreshToken(request *http.Request) string {
+	if c, err := request.Cookie("refresh_token"); err == nil && c != nil {
 		v := strings.TrimSpace(c.Value)
 		trimmed := strings.Trim(v, `"'`)
 		if trimmed != "" {
@@ -43,13 +45,13 @@ func extractRefreshToken(r *http.Request) string {
 		}
 	}
 
-	if r.Method == http.MethodPost || r.Method == http.MethodPut {
-		bodyBytes, err := io.ReadAll(r.Body)
+	if request.Method == http.MethodPost || request.Method == http.MethodPut {
+		bodyBytes, err := io.ReadAll(request.Body)
 		if err != nil {
 			return ""
 		}
 
-		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		var b refreshBody
 		if err := json.Unmarshal(bodyBytes, &b); err == nil {
@@ -106,21 +108,19 @@ func clearAuthCookies(w http.ResponseWriter) {
 	})
 }
 
-func (h *AuthHandlers) JWKS(w http.ResponseWriter, r *http.Request) {
+func (handler *AuthHandlers) JWKS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(h.SVC.JWKS())
+	_, _ = w.Write(handler.SVC.JWKS())
 }
 
-// --- Handlers using HTTP DTOs -> application DTOs ---
-
-func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
+func (handler *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
 	var req signUpRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return BadRequest("invalid json body")
 	}
 
-	in := auth2.SignUpInput{
+	in := auth.SignUpInput{
 		Tenant:    req.Tenant,
 		Email:     req.Email,
 		Username:  req.Username,
@@ -130,7 +130,7 @@ func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
 		UserAgent: r.UserAgent(),
 	}
 
-	userID, tok, err := h.SVC.SignUp(r.Context(), in)
+	userID, tok, err := handler.SVC.SignUp(r.Context(), in)
 	if err != nil {
 		return err
 	}
@@ -150,13 +150,13 @@ func (h *AuthHandlers) SignUp(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
+func (handler *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
 	var req signInRequestDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return BadRequest("invalid json body")
 	}
 
-	in := auth2.SignInInput{
+	in := auth.SignInInput{
 		Tenant:     req.Tenant,
 		Identifier: req.Identifier,
 		Password:   req.Password,
@@ -164,7 +164,7 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
 		UserAgent:  r.UserAgent(),
 	}
 
-	uid, email, username, tok, err := h.SVC.SignIn(r.Context(), in)
+	uid, email, username, tok, err := handler.SVC.SignIn(r.Context(), in)
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func (h *AuthHandlers) SignIn(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) error {
+func (handler *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) error {
 	rt := extractRefreshToken(r)
 	if rt == "" {
 		return BadRequest("missing refresh token")
@@ -198,7 +198,7 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) error {
 	ip := getClientIP(r)
 	ua := r.UserAgent()
 
-	tok, err := h.SVC.RefreshTokens(r.Context(), rt, ua, ip, "")
+	tok, err := handler.SVC.RefreshTokens(r.Context(), rt, ua, ip, "")
 	if err != nil {
 		return err
 	}
@@ -216,13 +216,13 @@ func (h *AuthHandlers) Refresh(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) error {
+func (handler *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) error {
 	rt := extractRefreshToken(r)
 	if rt == "" {
 		return BadRequest("missing refresh token")
 	}
 
-	if err := h.SVC.Logout(r.Context(), rt); err != nil {
+	if err := handler.SVC.Logout(r.Context(), rt); err != nil {
 		return err
 	}
 
@@ -231,13 +231,13 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) error {
+func (handler *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) error {
 	rt := extractRefreshToken(r)
 	if rt == "" {
 		return BadRequest("missing refresh token")
 	}
 
-	if err := h.SVC.LogoutAll(r.Context(), rt); err != nil {
+	if err := handler.SVC.LogoutAll(r.Context(), rt); err != nil {
 		return err
 	}
 
@@ -246,7 +246,7 @@ func (h *AuthHandlers) LogoutAll(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) error {
+func (handler *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) error {
 	userID, _ := r.Context().Value(ctxUserID).(string)
 	tenantID, _ := r.Context().Value(ctxTenantID).(string)
 
@@ -254,7 +254,7 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) error {
 		return Unauthorized("missing or invalid authentication")
 	}
 
-	email, username, err := h.SVC.Me(r.Context(), tenantID, userID)
+	email, username, err := handler.SVC.Me(r.Context(), tenantID, userID)
 	if err != nil {
 		return NotFound("user not found")
 	}
@@ -268,6 +268,82 @@ func (h *AuthHandlers) Me(w http.ResponseWriter, r *http.Request) error {
 		},
 	})
 	return nil
+}
+
+func (handler *AuthHandlers) OAuthStart(w http.ResponseWriter, r *http.Request) error {
+	provider := chi.URLParam(r, "provider")
+	q := r.URL.Query()
+
+	tenant := q.Get("tenant")
+	clientID := q.Get("client_id")
+	redirectURI := q.Get("redirect_uri")
+
+	log.Printf("OAuth Start - provider: %s, tenant: %s, clientID: %s, redirectURI: %s",
+		provider, tenant, clientID, redirectURI)
+
+	if tenant == "" || clientID == "" || redirectURI == "" {
+		return BadRequest("missing tenant, client_id, or redirect_uri")
+	}
+
+	in := auth.OAuthStartInput{
+		Provider:    provider,
+		Tenant:      tenant,
+		ClientID:    clientID,
+		RedirectURI: redirectURI,
+		IP:          getClientIP(r),
+		UserAgent:   r.UserAgent(),
+	}
+
+	redirectURL, err := handler.SVC.BuildOAuthRedirectURL(r.Context(), in)
+	if err != nil {
+		log.Printf("BuildOAuthRedirectURL error: %v", err) // <-- ADD THIS
+		return err
+	}
+
+	http.Redirect(w, r, redirectURL, http.StatusFound)
+	return nil
+}
+
+func (handler *AuthHandlers) OAuthCallback(w http.ResponseWriter, r *http.Request) error {
+	provider := chi.URLParam(r, "provider")
+	code := r.URL.Query().Get("code")
+	state := r.URL.Query().Get("state")
+
+	if code == "" {
+		return BadRequest("missing authorization code")
+	}
+	if state == "" {
+		return BadRequest("missing state parameter")
+	}
+
+	uid, email, username, tok, err := handler.SVC.HandleOAuthCallback(
+		r.Context(), provider, code, state, getClientIP(r), r.UserAgent(),
+	)
+	if err != nil {
+		return err
+	}
+
+	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
+
+	resp := struct {
+		UserID   string           `json:"user_id"`
+		Email    *string          `json:"email,omitempty"`
+		Username *string          `json:"username,omitempty"`
+		Token    tokenResponseDTO `json:"token"`
+	}{
+		UserID:   uid,
+		Email:    email,
+		Username: username,
+		Token: tokenResponseDTO{
+			AccessToken:  tok.AccessToken,
+			RefreshToken: tok.RefreshToken,
+			ExpiresInSec: tok.ExpiresInSec,
+			TokenType:    tok.TokenType,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(resp)
 }
 
 func jsonResp(w http.ResponseWriter, status int, v any) {

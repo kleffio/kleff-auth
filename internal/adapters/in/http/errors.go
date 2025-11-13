@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/kleffio/kleff-auth/internal/core/service/auth"
@@ -184,6 +185,15 @@ func httpStatusAndMsg(err error) (int, string) {
 		return http.StatusUnauthorized, "invalid refresh token"
 	case errors.Is(err, auth.ErrReuseDetected):
 		return http.StatusForbidden, "refresh token reuse detected"
+	case errors.Is(err, auth.ErrInvalidClient):
+		return http.StatusBadRequest, "invalid oauth client"
+	case errors.Is(err, auth.ErrInvalidRedirectURI):
+		return http.StatusBadRequest, "invalid redirect uri"
+	case errors.Is(err, auth.ErrUnsupportedProvider):
+		return http.StatusBadRequest, "unsupported oauth provider"
+	case errors.Is(err, auth.ErrInvalidState):
+		return http.StatusBadRequest, "invalid oauth state"
+
 	default:
 		return http.StatusInternalServerError, "internal server error"
 	}
@@ -194,15 +204,15 @@ func ErrorMiddleware(h HandlerWithError) http.HandlerFunc {
 		if err := h(w, r); err == nil {
 			return
 		} else {
+			log.Printf("handler error %s %s: %+v", r.Method, r.URL.String(), err)
+
 			var httpErr *HTTPError
 			if errors.As(err, &httpErr) {
 				respondWithError(w, httpErr.StatusCode, httpErr.Error(), httpErr.Details)
-
 				return
 			}
 
 			statusCode, message := httpStatusAndMsg(err)
-
 			respondWithError(w, statusCode, message, nil)
 		}
 	}

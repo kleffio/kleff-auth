@@ -49,6 +49,25 @@ type SessionRepoPort interface {
 	UpdateLastUsed(ctx context.Context, id uuid.UUID) error
 }
 
+type OAuthClientRepoPort interface {
+	GetOAuthClient(ctx context.Context, tenantID, clientID, provider string) (*domain.OAuthClient, error)
+}
+
+type OAuthStateCodecPort interface {
+	Encode(state *domain.OAuthState) (string, error)
+	Decode(stateStr string) (*domain.OAuthState, error)
+}
+
+type OAuthProviderPort interface {
+	BuildAuthURL(ctx context.Context, provider string, cfg *domain.OAuthProviderConfig, state string) (string, error)
+	ExchangeCode(ctx context.Context, provider string, cfg *domain.OAuthProviderConfig, code string) (*domain.OAuthIdentity, error)
+}
+
+type OAuthUserRepoPort interface {
+	GetUserByOAuth(ctx context.Context, provider, providerUserID string) (tenantID string, userID string, email, username *string, err error)
+	CreateUserFromOAuth(ctx context.Context, info *domain.OAuthIdentity) (tenantID string, userID string, err error)
+}
+
 type TimeProvider interface {
 	Now() time.Time
 }
