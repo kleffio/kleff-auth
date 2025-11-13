@@ -4,7 +4,7 @@ services:
     container_name: auth_db
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASS:-postgres}
       POSTGRES_DB: ${DB_NAME:-auth}
     volumes:
       - db_data:/var/lib/postgresql/data
@@ -27,19 +27,24 @@ services:
       auth-db:
         condition: service_healthy
     environment:
-      PORT: ${PORT:-8080}
       DB_HOST: auth-db
       DB_PORT: 5432
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_PASS: ${DB_PASS:-postgres}
       DB_NAME: ${DB_NAME:-auth}
-      DATABASE_URL: >-
-        ${DATABASE_URL:-postgres://${DB_USER:-postgres}:
-        ${DB_PASSWORD:-postgres}@auth-db:5432/${DB_NAME:-auth}?
-        sslmode=disable}
-      MIGRATE_ON_START: ${MIGRATE_ON_START:-false}
+
+      OAUTH_STATE_KEY: ${OAUTH_STATE_KEY}
+
+      JWT_ISSUER: ${JWT_ISSUER}
+
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
     ports:
       - "${PORT_PUBLISH:-8080}:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]

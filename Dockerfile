@@ -25,6 +25,8 @@ WORKDIR /app
 
 COPY --from=build /out/auth /app/auth
 
+COPY config.yaml /app/config.yaml
+
 EXPOSE 8080
 
 ENV PORT=8080

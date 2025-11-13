@@ -352,7 +352,7 @@ func (s *Service) HandleOAuthCallback(
 	}
 
 	var (
-		tenantID = state.TenantID
+		tenantID string
 		uid      string
 		em, un   *string
 	)

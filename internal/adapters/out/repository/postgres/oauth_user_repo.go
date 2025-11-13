@@ -47,7 +47,10 @@ func (r *OAuthUserRepo) CreateUserFromOAuth(
 	if err != nil {
 		return "", "", err
 	}
-	defer tx.Rollback(ctx)
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	const getTenantQ = `SELECT id::text FROM tenants WHERE slug = $1;`
 	err = tx.QueryRow(ctx, getTenantQ, identity.TenantSlug).Scan(&tenantID)

@@ -1,7 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -47,17 +50,49 @@ type OAuthProviderConfig struct {
 	Scopes       []string `yaml:"scopes"`
 }
 
+const configRootEnv = "KLEFF_CONFIG_ROOT"
+
+func getConfigRoot() (string, error) {
+	root := os.Getenv(configRootEnv)
+	if root == "" {
+		root = "."
+	}
+
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve config root: %w", err)
+	}
+
+	return abs, nil
+}
+
 func LoadRuntimeConfig(path string) (*RuntimeConfig, error) {
-	data, err := os.ReadFile(path)
+	configRoot, err := getConfigRoot()
 	if err != nil {
 		return nil, err
+	}
+
+	rel := filepath.Clean(path)
+
+	targetAbs, err := filepath.Abs(filepath.Join(configRoot, rel))
+	if err != nil {
+		return nil, fmt.Errorf("resolve config path %q: %w", path, err)
+	}
+
+	if !strings.HasPrefix(targetAbs, configRoot+string(os.PathSeparator)) && targetAbs != configRoot {
+		return nil, fmt.Errorf("config path %q is outside allowed root %q", targetAbs, configRoot)
+	}
+
+	data, err := os.ReadFile(targetAbs)
+	if err != nil {
+		return nil, fmt.Errorf("read runtime config %q: %w", targetAbs, err)
 	}
 
 	data = []byte(os.ExpandEnv(string(data)))
 
 	var cfg RuntimeConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal runtime config %q: %w", targetAbs, err)
 	}
 
 	return &cfg, nil
