@@ -28,6 +28,12 @@
   :root {
     color-scheme: dark;
     background-color: rgb(var(--color-background));
+    background: linear-gradient(
+        to bottom,
+        rgb(var(--color-background)) 0%,
+        rgb(var(--color-background)) 40%,
+        #000 100%
+    );
   }
   body {
     @apply bg-background text-foreground;

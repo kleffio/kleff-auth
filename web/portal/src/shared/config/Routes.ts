@@ -1,5 +1,6 @@
 export const Routes = [
-  { key: 'home', label: 'Home', path: '/', end: true },
+  { key: 'landing', label: 'Landing Page', path: '/', end: true },
+  { key: 'dashboard', label: 'Dashboard', path: '/dashboard', end: true },
 ]
 
 export type RouteKey = (typeof Routes)[number]['key']

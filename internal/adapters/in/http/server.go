@@ -22,13 +22,13 @@ func NewRouter(svc *auth.Service) http.Handler {
 	r.Use(middleware.Compress(5))
 
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://kleff.io", "https://kleff.ca", "https://kleff.app", "http://localhost:3000"},
+		AllowedOrigins:   []string{"https://kleff.io", "https://kleff.ca", "https://kleff.app", "http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
 
-	r.Route("/v1/auth", func(r chi.Router) {
+	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Get("/.well-known/jwks.json", h.JWKS)
 		r.Post("/signup", ErrorMiddleware(h.SignUp))
 		r.Post("/signin", ErrorMiddleware(h.SignIn))

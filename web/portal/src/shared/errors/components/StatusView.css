@@ -6,12 +6,6 @@
   place-items: center;
   padding: 4rem 1.5rem;
   color: rgb(var(--color-foreground));
-  background: linear-gradient(
-    to bottom,
-    rgb(10 10 10) 0%,
-    rgb(10 10 10) 40%,
-    #000 100%
-  );
 }
 
 .status-wrap {

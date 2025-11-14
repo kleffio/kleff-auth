@@ -1,22 +1,13 @@
-import { useLocation } from 'react-router-dom';
+import "./StatusView.css";
 
-import { Button } from '@/components/ui';
-
-import './StatusView.css';
-
-type LocationState = {
-  status?: number;
-  message?: string;
+type StatusViewProps = {
+  status: number;
+  message: string;
 };
 
-export default function StatusView() {
-  const { state } = useLocation() as { state?: LocationState };
-
-  const status = state?.status ?? 404;
-  const message = state?.message ?? 'Page not found';
-
+export function StatusView({ status, message }: StatusViewProps) {
   return (
-    <main className="status-root">
+    <div className="status-root">
       <div className="status-wrap">
         <div className="status-badge">
           <span className="dot" />
@@ -24,20 +15,30 @@ export default function StatusView() {
           <span className="code">{status}</span>
         </div>
 
-        <h1 className="status-number text-gradient-brand">{status}</h1>
+        <h1 className="status-number">{status}</h1>
 
         <p className="status-message">{message}</p>
 
         <div className="status-actions">
-          <Button to="/" variant="glass" isDeep textSize=".95rem">
+          <button
+            onClick={() => window.location.reload()}
+            className="button button-primary"
+          >
+            Retry
+          </button>
+
+          <button
+            onClick={() => (window.location.href = "/")}
+            className="button button-secondary"
+          >
             Go Home
-          </Button>
+          </button>
         </div>
 
         <p className="status-tip">
-          If you typed the URL directly, please check the spelling.
+          If the issue persists, the backend may be offline.
         </p>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,26 +1,36 @@
-import StatusView from '@/shared/errors/components/StatusView';
+import React, { type ReactNode } from "react";
 
-import {
-  HttpException,
-  NotFoundException,
-} from '@/shared/errors/HttpExceptions';
+type ErrorBoundaryProps = {
+  fallback: ReactNode;
+  children: ReactNode;
+};
 
-import { isRouteErrorResponse, useRouteError } from 'react-router-dom';
+type ErrorBoundaryState = {
+  hasError: boolean;
+};
 
-export default function ErrorBoundary() {
-  const error = useRouteError();
-
-  if (error instanceof NotFoundException) {
-    return <StatusView />;
+export class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
   }
 
-  if (error instanceof HttpException) {
-    return <StatusView />;
+  static getDerivedStateFromError(_error: unknown): ErrorBoundaryState {
+    return { hasError: true };
   }
 
-  if (isRouteErrorResponse(error)) {
-    return <StatusView />;
+  componentDidCatch(error: unknown, info: unknown) {
+    console.error("ErrorBoundary caught:", error, info);
   }
 
-  return <StatusView />;
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
 }

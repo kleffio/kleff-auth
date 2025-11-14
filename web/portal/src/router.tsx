@@ -4,16 +4,27 @@ import { App } from '@/components/layout/App';
 
 import { RoutePaths } from '@/shared/config/Routes';
 
-import ErrorBoundary from '@/shared/errors/ErrorBoundary';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { DashboardPage } from './pages/DashboardPage';
+import { LandingPage } from './pages/LandingPage';
 
 const router = createBrowserRouter([
   {
     path: RoutePaths.home,
     element: <App />,
-    errorElement: <ErrorBoundary />,
     children: [
-      //{ index: true, element: <Home /> },
-     // { path: RoutePaths.projects, element: <Projects /> },
+      {
+        index: true,
+        element: <LandingPage />,
+      },
+      {
+        path: RoutePaths.dashboard,
+        element: (
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        ),
+      },
     ],
   },
 ]);

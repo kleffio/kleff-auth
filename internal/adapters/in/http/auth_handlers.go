@@ -296,7 +296,7 @@ func (handler *AuthHandlers) OAuthStart(w http.ResponseWriter, r *http.Request) 
 
 	redirectURL, err := handler.SVC.BuildOAuthRedirectURL(r.Context(), in)
 	if err != nil {
-		log.Printf("BuildOAuthRedirectURL error: %v", err) // <-- ADD THIS
+		log.Printf("BuildOAuthRedirectURL error: %v", err)
 		return err
 	}
 
@@ -307,17 +307,17 @@ func (handler *AuthHandlers) OAuthStart(w http.ResponseWriter, r *http.Request) 
 func (handler *AuthHandlers) OAuthCallback(w http.ResponseWriter, r *http.Request) error {
 	provider := chi.URLParam(r, "provider")
 	code := r.URL.Query().Get("code")
-	state := r.URL.Query().Get("state")
+	stateStr := r.URL.Query().Get("state")
 
 	if code == "" {
 		return BadRequest("missing authorization code")
 	}
-	if state == "" {
+	if stateStr == "" {
 		return BadRequest("missing state parameter")
 	}
 
 	uid, email, username, tok, err := handler.SVC.HandleOAuthCallback(
-		r.Context(), provider, code, state, getClientIP(r), r.UserAgent(),
+		r.Context(), provider, code, stateStr, getClientIP(r), r.UserAgent(),
 	)
 	if err != nil {
 		return err
@@ -325,25 +325,36 @@ func (handler *AuthHandlers) OAuthCallback(w http.ResponseWriter, r *http.Reques
 
 	setAuthCookies(w, tok.AccessToken, tok.RefreshToken, tok.ExpiresInSec, 60*60*24*30)
 
-	resp := struct {
-		UserID   string           `json:"user_id"`
-		Email    *string          `json:"email,omitempty"`
-		Username *string          `json:"username,omitempty"`
-		Token    tokenResponseDTO `json:"token"`
-	}{
-		UserID:   uid,
-		Email:    email,
-		Username: username,
-		Token: tokenResponseDTO{
-			AccessToken:  tok.AccessToken,
-			RefreshToken: tok.RefreshToken,
-			ExpiresInSec: tok.ExpiresInSec,
-			TokenType:    tok.TokenType,
-		},
+	st, err := handler.SVC.OAuthState.Decode(stateStr)
+	if err != nil {
+		log.Printf("OAuthCallback: failed to decode state for redirect: %v", err)
+
+		w.Header().Set("Content-Type", "application/json")
+		resp := struct {
+			UserID   string           `json:"user_id"`
+			Email    *string          `json:"email,omitempty"`
+			Username *string          `json:"username,omitempty"`
+			Token    tokenResponseDTO `json:"token"`
+		}{
+			UserID:   uid,
+			Email:    email,
+			Username: username,
+			Token: tokenResponseDTO{
+				AccessToken:  tok.AccessToken,
+				RefreshToken: tok.RefreshToken,
+				ExpiresInSec: tok.ExpiresInSec,
+				TokenType:    tok.TokenType,
+			},
+		}
+		return json.NewEncoder(w).Encode(resp)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	return json.NewEncoder(w).Encode(resp)
+	if st.RedirectURI == "" {
+		st.RedirectURI = "http://localhost:5173/dashboard"
+	}
+
+	http.Redirect(w, r, st.RedirectURI, http.StatusFound)
+	return nil
 }
 
 func jsonResp(w http.ResponseWriter, status int, v any) {
