@@ -6,7 +6,8 @@ import { RoutePaths } from '@/shared/config/Routes';
 
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { DashboardPage } from './pages/DashboardPage';
-import { LandingPage } from './pages/LandingPage';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
 
 const router = createBrowserRouter([
   {
@@ -15,14 +16,22 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <LandingPage />,
-      },
-      {
-        path: RoutePaths.dashboard,
         element: (
           <ProtectedRoute>
             <DashboardPage />
           </ProtectedRoute>
+        ),
+      },
+      {
+        path: RoutePaths.signup,
+        element: (
+          <SignupPage />
+        ),
+      },
+      {
+        path: RoutePaths.login,
+        element: (
+          <LoginPage />
         ),
       },
     ],

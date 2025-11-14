@@ -350,7 +350,7 @@ func (handler *AuthHandlers) OAuthCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	if st.RedirectURI == "" {
-		st.RedirectURI = "http://localhost:5173/dashboard"
+		st.RedirectURI = "http://localhost:5173/"
 	}
 
 	http.Redirect(w, r, st.RedirectURI, http.StatusFound)

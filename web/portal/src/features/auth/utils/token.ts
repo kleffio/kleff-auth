@@ -1,17 +1,30 @@
 import type { Tokens } from "../types/user";
 
-const KEY = "kleff_auth_tokens";
+const KEY = "kleff_tokens";
 
-export const saveTokens = (tokens: Tokens) => {
-  localStorage.setItem(KEY, JSON.stringify(tokens));
-};
+export function saveTokens(tokens: Tokens) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(tokens));
+  } catch (err) {
+    console.error("Failed to save tokens:", err);
+  }
+}
 
-export const loadTokens = (): Tokens | null => {
-  const raw = localStorage.getItem(KEY);
-  if (!raw) return null;
-  return JSON.parse(raw);
-};
+export function loadTokens(): Tokens | null {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Tokens;
+  } catch (err) {
+    console.error("Failed to load tokens:", err);
+    return null;
+  }
+}
 
-export const clearTokens = () => {
-  localStorage.removeItem(KEY);
-};
+export function clearTokens() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch (err) {
+    console.error("Failed to clear tokens:", err);
+  }
+}
